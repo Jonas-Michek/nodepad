@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+export const runtime = "edge"
+
 // ── Sliding-window rate limiter ───────────────────────────────────────────────
 // Guards /api/fetch-url from being hammered as a public CORS proxy.
 // On serverless (Vercel) this is best-effort per-instance; on persistent
