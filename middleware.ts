@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 
-export const runtime = "edge"
-
 // ── Sliding-window rate limiter ───────────────────────────────────────────────
 // Guards /api/fetch-url from being hammered as a public CORS proxy.
 // On serverless (Vercel) this is best-effort per-instance; on persistent
@@ -19,7 +17,7 @@ function isRateLimited(ip: string, path: string): boolean {
   return false
 }
 
-export function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   if (!pathname.startsWith("/api/fetch-url")) {
