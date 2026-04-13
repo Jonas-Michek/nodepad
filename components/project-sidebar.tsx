@@ -26,6 +26,8 @@ import {
   type AISettings,
   type AIProvider,
 } from "@/lib/ai-settings"
+import type { SyncSettings } from "@/lib/sync-settings"
+import { Cloud, CloudOff } from "lucide-react"
 
 interface Project {
   id: string
@@ -49,6 +51,9 @@ interface ProjectSidebarProps {
   // AI Settings
   aiSettings: AISettings
   onUpdateAISettings: (patch: Partial<AISettings>) => void
+  // Sync Settings
+  syncSettings: SyncSettings
+  onUpdateSyncSettings: (patch: Partial<SyncSettings>) => void
 }
 
 export function ProjectSidebar({
@@ -63,6 +68,8 @@ export function ProjectSidebar({
   onDeleteProject,
   aiSettings,
   onUpdateAISettings,
+  syncSettings,
+  onUpdateSyncSettings,
   openToSettings,
   onSettingsOpened,
 }: ProjectSidebarProps) {
@@ -75,6 +82,8 @@ export function ProjectSidebar({
   const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
+  const [syncDraft, setSyncDraft] = useState<SyncSettings>(syncSettings)
+  const [showSyncKey, setShowSyncKey] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -86,8 +95,11 @@ export function ProjectSidebar({
 
   // Sync draft when panel opens
   useEffect(() => {
-    if (showSettings) setDraft(aiSettings)
-  }, [showSettings])
+    if (showSettings) {
+      setDraft(aiSettings)
+      setSyncDraft(syncSettings)
+    }
+  }, [showSettings, aiSettings, syncSettings])
 
   // Jump straight to settings when requested externally
   useEffect(() => {
@@ -115,6 +127,7 @@ export function ProjectSidebar({
       [draft.provider]: trimmedKey,
     }
     onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys })
+    onUpdateSyncSettings(syncDraft)
   }
 
   const handleSaveSettings = () => {
@@ -483,6 +496,60 @@ export function ProjectSidebar({
                   <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
                   {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
                 </div>
+
+                <div className="h-px bg-white/5 my-2" />
+
+                {/* Cloud Sync section */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      Cloud Sync
+                    </label>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                      <input
+                        type="url"
+                        value={syncDraft.url}
+                        onChange={e => setSyncDraft(d => ({ ...d, url: e.target.value }))}
+                        placeholder="https://api.jsonbin.io/v3/b/..."
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                      GET/PUT JSON Endpoint URL.
+                    </p>
+
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                      <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={syncDraft.apiKey}
+                        onChange={e => setSyncDraft(d => ({ ...d, apiKey: e.target.value }))}
+                        placeholder="API Key / Auth Header (Optional)"
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        style={showSyncKey ? undefined : { WebkitTextSecurity: "disc" } as never}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button onClick={() => setShowSyncKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Toggle visibility">
+                        {showSyncKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      </button>
+                    </div>
+                    <div className={`flex items-center gap-2 mt-1 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+                      syncDraft.url
+                        ? "bg-primary/10 border border-primary/20 text-primary"
+                        : "bg-white/5 border border-white/5 text-muted-foreground"
+                    }`}>
+                      {syncDraft.url ? <Cloud className="h-2.5 w-2.5 shrink-0" /> : <CloudOff className="h-2.5 w-2.5 shrink-0" />}
+                      {syncDraft.url ? "Cloud sync enabled" : "Sync disabled"}
+                    </div>
+                  </div>
+                </div>
+
               </motion.div>
             )}
           </AnimatePresence>

@@ -17,6 +17,7 @@ import { INITIAL_PROJECTS } from "@/lib/initial-data"
 import { useAISettings } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
+import { useSyncSettings } from "@/lib/sync-settings"
 import { exportToMarkdown, downloadMarkdown, copyToClipboard } from "@/lib/export"
 import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
@@ -61,6 +62,7 @@ export default function Page() {
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
   const { settings, updateSettings, resolvedModelId, currentModel, isHydrated } = useAISettings()
+  const { settings: syncSettings, updateSettings: updateSyncSettings, isHydrated: isSyncHydrated } = useSyncSettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
 
   // ── Undo history ring (max 20 block snapshots per project) ───────────────
@@ -204,12 +206,94 @@ export default function Page() {
 
   }, [])
 
+  // Cloud Sync properties
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle")
+  const isInitialCloudLoadDone = useRef(false)
+  const lastSyncPayloadRef = useRef<string>("")
+
+  // Cloud Sync: Initial Load
+  useEffect(() => {
+    if (!isSyncHydrated || !syncSettings.url || isInitialCloudLoadDone.current) return
+    let isSubscribed = true
+
+    const fetchCloud = async () => {
+      setSyncStatus("syncing")
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (syncSettings.apiKey) {
+          headers["X-Master-Key"] = syncSettings.apiKey
+          headers["Authorization"] = `Bearer ${syncSettings.apiKey}`
+        }
+        const res = await fetch(syncSettings.url, { method: "GET", headers })
+        if (!res.ok) throw new Error("Cloud sync fetch failed")
+        
+        let data = await res.json()
+        // Handle common jsonbin.io response { record: [...] }
+        if (data && data.record && Array.isArray(data.record)) {
+          data = data.record
+        }
+
+        if (Array.isArray(data) && data.length > 0 && isSubscribed) {
+          const payloadStr = JSON.stringify(data)
+          lastSyncPayloadRef.current = payloadStr
+          setProjects(data)
+          setActiveProjectId(data[0].id)
+          setSyncStatus("success")
+        } else {
+          throw new Error("Invalid format received from cloud")
+        }
+      } catch (err) {
+        console.error("Cloud fetch error:", err)
+        if (isSubscribed) setSyncStatus("error")
+      } finally {
+        if (isSubscribed) isInitialCloudLoadDone.current = true
+      }
+    }
+    
+    fetchCloud()
+    return () => { isSubscribed = false }
+  }, [syncSettings.url, syncSettings.apiKey, isSyncHydrated])
+
   // 2. Persistence: Save on Change
   useEffect(() => {
     if (!isLoaded) return
-    localStorage.setItem("nodepad-projects", JSON.stringify(projects))
+    const payloadStr = JSON.stringify(projects)
+    localStorage.setItem("nodepad-projects", payloadStr)
     localStorage.setItem("nodepad-active-project", activeProjectId)
-  }, [projects, activeProjectId, isLoaded])
+
+    // Cloud Sync: Debounced Save
+    if (syncSettings.url && isInitialCloudLoadDone.current && payloadStr !== lastSyncPayloadRef.current) {
+      if (debounceTimers.current["sync"]) clearTimeout(debounceTimers.current["sync"]["push"])
+      if (!debounceTimers.current["sync"]) debounceTimers.current["sync"] = {}
+
+      setSyncStatus("syncing")
+      debounceTimers.current["sync"]["push"] = setTimeout(async () => {
+        try {
+          const headers: Record<string, string> = { "Content-Type": "application/json" }
+          if (syncSettings.apiKey) {
+            headers["X-Master-Key"] = syncSettings.apiKey
+            headers["Authorization"] = `Bearer ${syncSettings.apiKey}`
+          }
+          const res = await fetch(syncSettings.url, {
+            method: "PUT",
+            headers,
+            body: payloadStr
+          })
+          
+          if (!res.ok) {
+            // Some bins require POST if not existing
+            throw new Error("PUT failed")
+          }
+          lastSyncPayloadRef.current = payloadStr
+          setSyncStatus("success")
+        } catch (err) {
+          console.error("Cloud sync save error:", err)
+          setSyncStatus("error")
+        }
+      }, 2500)
+    }
+
+  }, [projects, activeProjectId, isLoaded, syncSettings.url, syncSettings.apiKey])
 
   // 3. Silent rolling backup — written on every change, separate key.
   //    If nodepad-projects is ever wiped, the load effect can fall back to this.
@@ -860,6 +944,8 @@ export default function Page() {
         onImportProject={() => importInputRef.current?.click()}
         aiSettings={settings}
         onUpdateAISettings={updateSettings}
+        syncSettings={syncSettings}
+        onUpdateSyncSettings={updateSyncSettings}
         openToSettings={jumpToSettings}
         onSettingsOpened={() => setJumpToSettings(false)}
       />
@@ -882,6 +968,7 @@ export default function Page() {
             setShowHelpTooltip(false)
             if (helpTooltipTimer.current) clearTimeout(helpTooltipTimer.current)
           }}
+          syncStatus={syncSettings.url ? syncStatus : undefined}
         />
 
         {isHydrated && !settings.apiKey && (

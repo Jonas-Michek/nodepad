@@ -6,7 +6,7 @@ import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
 import { AboutPanel } from "@/components/about-panel"
 
-import { Menu, LayoutList, Sparkles, Info } from "lucide-react"
+import { Menu, LayoutList, Sparkles, Info, Cloud, RefreshCw, AlertCircle } from "lucide-react"
 
 interface StatusBarProps {
   blockCount: number
@@ -22,6 +22,7 @@ interface StatusBarProps {
   modelLabel?: string
   showHelpTooltip?: boolean
   onHelpTooltipDismiss?: () => void
+  syncStatus?: "idle" | "syncing" | "success" | "error"
 }
 
 export function StatusBar({
@@ -38,6 +39,7 @@ export function StatusBar({
   modelLabel,
   showHelpTooltip,
   onHelpTooltipDismiss,
+  syncStatus,
 }: StatusBarProps) {
   const [time, setTime] = useState("")
   const [isAboutOpen, setIsAboutOpen] = useState(false)
@@ -224,6 +226,24 @@ export function StatusBar({
           </div>
         )}
         <div className="flex items-center gap-1.5 md:gap-2 border-l border-white/5 pl-2 md:pl-4 ml-0 md:ml-4">
+          {/* Cloud Sync Status */}
+          {syncStatus && (
+            <div className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded-sm border ${
+              syncStatus === "syncing" ? "bg-primary/10 border-primary/20 text-primary" :
+              syncStatus === "success" ? "bg-green-500/10 border-green-500/20 text-green-500" :
+              syncStatus === "error" ? "bg-destructive/10 border-destructive/20 text-destructive" :
+              "bg-white/5 border-white/10 text-muted-foreground"
+            }`}>
+              {syncStatus === "syncing" && <RefreshCw className="h-3 w-3 animate-spin" />}
+              {syncStatus === "success" && <Cloud className="h-3 w-3" />}
+              {syncStatus === "error" && <AlertCircle className="h-3 w-3" />}
+              {syncStatus === "idle" && <Cloud className="h-3 w-3 opacity-50" />}
+              <span className="font-mono text-[9px] uppercase tracking-wider font-bold">
+                {syncStatus === "syncing" ? "Syncing..." : syncStatus === "success" ? "Synced" : syncStatus === "error" ? "Sync Error" : "Cloud"}
+              </span>
+            </div>
+          )}
+
           {/* Model indicator */}
           {modelLabel && (
             <span className="hidden md:inline-block font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
