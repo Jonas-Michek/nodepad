@@ -84,6 +84,17 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5` | Z.ai flagship model. |
 | `glm-5-turbo` | Fast, community-tested. |
 
+### Google AI Studio
+Use your Gemini API key directly via Google's OpenAI-compatible endpoint. Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+
+| Model | Notes |
+|---|---|
+| `gemini-2.5-pro` | Most capable Gemini model, long context. |
+| `gemini-2.5-flash` | Fast and capable. |
+| `gemini-2.5-flash-lite` | Very fast, free tier. |
+
+> **Note:** Web grounding is not available for this provider — Google Search grounding is not exposed through Google's OpenAI-compatible endpoint.
+
 ---
 
 ## Keyboard shortcuts

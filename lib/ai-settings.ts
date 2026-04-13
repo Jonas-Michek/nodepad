@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "google"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "google",
+    label: "Google AI Studio",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyUrl: "https://aistudio.google.com/apikey",
+    keyPlaceholder: "AIza...",
   },
 ]
 
@@ -174,9 +181,34 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+export const GOOGLE_MODELS: AIModel[] = [
+  {
+    id: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+    shortLabel: "Gemini",
+    description: "Most capable Gemini model, long context",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    shortLabel: "Flash",
+    description: "Fast and capable",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash Lite",
+    shortLabel: "Flash Lite",
+    description: "Very fast, free tier",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
-  if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
+  if (provider === "openai")  return OPENAI_MODELS
+  if (provider === "zai")     return ZAI_MODELS
+  if (provider === "google")  return GOOGLE_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
