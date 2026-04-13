@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono, Vazirmatn } from 'next/font/google'
 import Script from 'next/script'
-import { MobileWall } from '@/components/mobile-wall'
+
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -17,7 +17,13 @@ export const metadata: Metadata = {
   description: 'A spatial research tool where AI augments your thinking — not replaces it.',
   icons: {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
-    apple: '/apple-icon.png',
+    apple: '/icon.svg', // Fallback to SVG as apple-icon.png is missing
+  },
+  manifest: '/manifest.json', // Also Next.js maps app/manifest.ts to this route
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'nodepad',
   },
   openGraph: {
     title: 'nodepad',
@@ -42,7 +48,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans antialiased ${vazirmatn.variable}`} suppressHydrationWarning>
-        <MobileWall />
+
         {children}
         {/* Umami analytics — nodepad.space only. Remove or replace with your
             own data-website-id if self-hosting. Safe to delete entirely. */}

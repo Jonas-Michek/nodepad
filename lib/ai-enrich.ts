@@ -33,7 +33,9 @@ export async function parseProviderError(response: Response): Promise<string> {
       if (providerName) {
         return `${providerName} is rate-limiting free requests right now. Retry later or switch to a paid model.`
       }
-      return "Too many requests. Slow down and try again."
+      return errObj?.message 
+        ? `Too many requests: ${errObj.message}` 
+        : "Too many requests. Slow down and try again."
     case 502:
     case 503:
       if (providerName) {

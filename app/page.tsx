@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { TilingArea } from "@/components/tiling-area"
 import { KanbanArea } from "@/components/kanban-area"
 import { GraphArea } from "@/components/graph-area"
+import { InboxArea } from "@/components/inbox-area"
 import { ProjectSidebar } from "@/components/project-sidebar"
 import { StatusBar } from "@/components/status-bar"
 import { GhostPanel, type GhostNote } from "@/components/ghost-panel"
@@ -46,8 +47,15 @@ export default function Page() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isIndexOpen, setIsIndexOpen] = useState(false)
   const [isGhostPanelOpen, setIsGhostPanelOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<"tiling" | "kanban" | "graph">("tiling")
+  const [viewMode, setViewMode] = useState<"tiling" | "kanban" | "graph" | "inbox">("tiling")
   const [isCommandKOpen, setIsCommandKOpen] = useState(false)
+
+  // Force Inbox view on small screens automatically
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setViewMode("inbox")
+    }
+  }, [])
   const [jumpToSettings, setJumpToSettings] = useState(false)
   const [isIntroOpen, setIsIntroOpen] = useState(false)
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
@@ -767,6 +775,8 @@ export default function Page() {
       setViewMode("tiling")
     } else if (cmd === "graph") {
       setViewMode("graph")
+    } else if (cmd === "inbox") {
+      setViewMode("inbox")
     } else if (cmd === "open-projects") {
       setIsGhostPanelOpen(false)
       setIsIndexOpen(false)
@@ -931,7 +941,7 @@ export default function Page() {
                   onDeleteSubTask={handleDeleteSubTask}
                   collapsedIds={new Set(activeProject.collapsedIds)}
                 />
-              ) : (
+              ) : viewMode === "graph" ? (
                 <GraphArea
                   key={`graph-${activeProjectId}`}
                   blocks={activeProject.blocks}
@@ -942,6 +952,23 @@ export default function Page() {
                   onTogglePin={handleTogglePin}
                   onEdit={editBlock}
                   onEditAnnotation={editAnnotation}
+                  highlightedBlockId={highlightedBlockId}
+                  onHighlight={setHighlightedBlockId}
+                />
+              ) : (
+                <InboxArea
+                  key={`inbox-${activeProjectId}`}
+                  blocks={activeProject.blocks}
+                  collapsedIds={new Set(activeProject.collapsedIds)}
+                  onDelete={deleteBlock}
+                  onEdit={editBlock}
+                  onEditAnnotation={editAnnotation}
+                  onReEnrich={reEnrichBlock}
+                  onChangeType={handleChangeType}
+                  onToggleCollapse={toggleCollapse}
+                  onTogglePin={handleTogglePin}
+                  onToggleSubTask={handleToggleSubTask}
+                  onDeleteSubTask={handleDeleteSubTask}
                   highlightedBlockId={highlightedBlockId}
                   onHighlight={setHighlightedBlockId}
                 />
