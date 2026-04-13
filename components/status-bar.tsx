@@ -6,7 +6,7 @@ import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
 import { AboutPanel } from "@/components/about-panel"
 
-import { Menu, LayoutList, Sparkles } from "lucide-react"
+import { Menu, LayoutList, Sparkles, Info } from "lucide-react"
 
 interface StatusBarProps {
   blockCount: number
@@ -41,6 +41,7 @@ export function StatusBar({
 }: StatusBarProps) {
   const [time, setTime] = useState("")
   const [isAboutOpen, setIsAboutOpen] = useState(false)
+  const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false)
 
   const activity = useMemo(() => {
     return {
@@ -87,18 +88,18 @@ export function StatusBar({
         </button>
         
         <div className="flex items-center gap-2.5 ml-1">
-          <div className="flex items-center gap-0.5">
+          <div className="hidden md:flex items-center gap-0.5">
             <span className="inline-block h-2 w-2 rounded-sm bg-primary" />
             <span className="inline-block h-2 w-2 rounded-sm bg-primary/60" />
             <span className="inline-block h-2 w-2 rounded-sm bg-primary/30" />
           </div>
-          <h1 className="font-mono text-xs font-bold text-foreground tracking-tight select-none">
+          <h1 className="hidden md:block font-mono text-xs font-bold text-foreground tracking-tight select-none">
             nodepad
           </h1>
           {activeProjectName && (
-            <div className="flex items-center gap-2 ml-1">
-              <span className="text-muted-foreground/20 font-mono text-[10px]">/</span>
-              <span className="font-mono text-[9px] text-muted-foreground font-bold uppercase tracking-[0.2em]">{activeProjectName}</span>
+            <div className="flex items-center gap-2 md:ml-1">
+              <span className="hidden md:inline text-muted-foreground/20 font-mono text-[10px]">/</span>
+              <span className="font-mono text-[11px] md:text-[9px] text-foreground md:text-muted-foreground font-bold uppercase tracking-[0.2em]">{activeProjectName}</span>
             </div>
           )}
         </div>
@@ -106,61 +107,130 @@ export function StatusBar({
 
       <div className="flex items-center gap-4">
         {blockCount > 0 && (
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-[9px] text-muted-foreground/40 font-bold uppercase tracking-wider">
-              {blockCount} {blockCount === 1 ? 'node' : 'nodes'}
-            </span>
+          <div className="flex items-center gap-2 md:gap-4">
             
-            {activity.enriching > 0 && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-primary/10 border border-primary/20">
-                <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
-                <span className="font-mono text-[10px] text-primary">
-                  {activity.enriching} {blocks.length > activity.enriching ? "contextualizing..." : "processing..."}
-                </span>
-              </div>
-            )}
+            {/* Mobile Stats Toggle */}
+            <div className="flex md:hidden relative">
+              <button
+                onClick={() => setIsMobileStatsOpen(!isMobileStatsOpen)}
+                className={`p-1.5 rounded-sm transition-all duration-200 ${
+                  isMobileStatsOpen 
+                    ? "bg-primary/20 text-primary shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]" 
+                    : "hover:bg-secondary text-muted-foreground/50 hover:text-foreground"
+                }`}
+              >
+                <Info className="h-4 w-4" />
+              </button>
 
-            {activity.errors > 0 && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-destructive/10">
-                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-                <span className="font-mono text-[10px] text-destructive font-bold">
-                  {activity.errors} failed
-                </span>
-              </div>
-            )}
+              <AnimatePresence>
+                {isMobileStatsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-48 rounded-sm bg-card border border-border/50 shadow-xl p-3 z-50 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                       <span className="font-mono text-[10px] font-bold text-foreground/80 uppercase tracking-wider">Status</span>
+                       <span className="font-mono text-[10px] text-muted-foreground">{blockCount} {blockCount === 1 ? 'node' : 'nodes'}</span>
+                    </div>
 
-            {typeCounts.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground/20 italic">{"//"}</span>
-                <div className="flex items-center gap-3">
-                  {typeCounts.map(([type, count]) => {
-                    const config =
-                      CONTENT_TYPE_CONFIG[
-                        type as keyof typeof CONTENT_TYPE_CONFIG
-                      ]
-                    return (
-                      <span
-                        key={type}
-                        className="font-mono text-[9px] font-bold uppercase tracking-tighter"
-                        style={{ color: config.accentVar }}
-                      >
-                        {count} {config.label}
-                      </span>
-                    )
-                  })}
+                    {activity.enriching > 0 && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-primary/10 border border-primary/20">
+                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
+                        <span className="font-mono text-[10px] text-primary">
+                          {activity.enriching} processing
+                        </span>
+                      </div>
+                    )}
+                    {activity.errors > 0 && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-destructive/10">
+                        <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                        <span className="font-mono text-[10px] text-destructive font-bold">
+                          {activity.errors} failed
+                        </span>
+                      </div>
+                    )}
+
+                    {typeCounts.length > 0 && (
+                      <div className="flex items-center flex-wrap gap-2 pt-1 border-t border-border/40">
+                        {typeCounts.map(([type, count]) => {
+                          const config = CONTENT_TYPE_CONFIG[type as keyof typeof CONTENT_TYPE_CONFIG]
+                          return (
+                            <span
+                              key={type}
+                              className="font-mono text-[9px] font-bold uppercase tracking-tight bg-secondary/30 px-1.5 py-0.5 rounded-sm"
+                              style={{ color: config.accentVar }}
+                            >
+                              {count} {config.label}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Desktop Stats */}
+            <div className="hidden md:flex items-center gap-4">
+              <span className="font-mono text-[9px] text-muted-foreground/40 font-bold uppercase tracking-wider">
+                {blockCount} {blockCount === 1 ? 'node' : 'nodes'}
+              </span>
+              
+              {activity.enriching > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-primary/10 border border-primary/20">
+                  <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
+                  <span className="font-mono text-[10px] text-primary">
+                    {activity.enriching} {blocks.length > activity.enriching ? "contextualizing..." : "processing..."}
+                  </span>
                 </div>
-              </div>
-            )}
+              )}
+
+              {activity.errors > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-destructive/10">
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                  <span className="font-mono text-[10px] text-destructive font-bold">
+                    {activity.errors} failed
+                  </span>
+                </div>
+              )}
+
+              {typeCounts.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground/20 italic">{"//"}</span>
+                  <div className="flex items-center gap-3">
+                    {typeCounts.map(([type, count]) => {
+                      const config =
+                        CONTENT_TYPE_CONFIG[
+                          type as keyof typeof CONTENT_TYPE_CONFIG
+                        ]
+                      return (
+                        <span
+                          key={type}
+                          className="font-mono text-[9px] font-bold uppercase tracking-tighter"
+                          style={{ color: config.accentVar }}
+                        >
+                          {count} {config.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
-        <div className="flex items-center gap-2 border-l border-white/5 pl-4 ml-4">
+        <div className="flex items-center gap-1.5 md:gap-2 border-l border-white/5 pl-2 md:pl-4 ml-0 md:ml-4">
           {/* Model indicator */}
           {modelLabel && (
-            <span className="font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
+            <span className="hidden md:inline-block font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
               {modelLabel}
             </span>
           )}
-          <span className="font-mono text-[10px] text-muted-foreground tabular-nums" suppressHydrationWarning>
+          <span className="hidden md:inline-block font-mono text-[10px] text-muted-foreground tabular-nums" suppressHydrationWarning>
             {time}
           </span>
           {/* Ghost panel toggle with badge */}

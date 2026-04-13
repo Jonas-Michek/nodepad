@@ -135,14 +135,11 @@ export function ProjectSidebar({
 
   return (
     <div
-      style={{ 
-        width: isOpen ? 240 : 0,
-        opacity: isOpen ? 1 : 0,
-        visibility: isOpen ? "visible" : "hidden"
-      }}
-      className="relative z-50 transition-all duration-200 ease-in-out overflow-hidden border-r border-border bg-black/20 backdrop-blur-3xl flex flex-col h-full"
+      className={`relative z-50 transition-[max-width,opacity,visibility] duration-200 ease-in-out overflow-hidden border-r border-border bg-black/90 md:bg-black/20 backdrop-blur-3xl flex flex-col h-full shrink-0 ${
+        isOpen ? "max-w-full md:max-w-[240px] w-full md:w-[240px] opacity-100 visible" : "max-w-0 w-0 opacity-0 invisible"
+      }`}
     >
-      <div className="w-[240px] flex flex-col h-full">
+      <div className="w-screen md:w-[240px] flex flex-col h-full shrink-0">
         {/* Header */}
         <div className="flex h-10 items-center justify-between border-b border-border bg-card/5 backdrop-blur-md px-3 py-1.5 shrink-0">
           <div className="flex items-center gap-2.5">
