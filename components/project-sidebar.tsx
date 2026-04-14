@@ -127,7 +127,10 @@ export function ProjectSidebar({
       [draft.provider]: trimmedKey,
     }
     onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys })
-    onUpdateSyncSettings(syncDraft)
+    onUpdateSyncSettings({
+      url: syncDraft.url.trim(),
+      apiKey: syncDraft.apiKey.trim()
+    })
   }
 
   const handleSaveSettings = () => {

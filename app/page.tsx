@@ -211,6 +211,17 @@ export default function Page() {
   const isInitialCloudLoadDone = useRef(false)
   const lastSyncPayloadRef = useRef<string>("")
 
+  const normalizeSyncUrl = useCallback((url: string) => {
+    if (!url) return ""
+    let target = url.trim()
+    // Auto-fix jsonbin.io dashboard URLs
+    // https://api.jsonbin.io/app/bins/ID -> https://api.jsonbin.io/v3/b/ID
+    if (target.includes("jsonbin.io/app/bins/")) {
+      target = target.replace("/app/bins/", "/v3/b/")
+    }
+    return target
+  }, [])
+
   // Cloud Sync: Initial Load
   useEffect(() => {
     if (!isSyncHydrated || !syncSettings.url || isInitialCloudLoadDone.current) return
@@ -218,14 +229,27 @@ export default function Page() {
 
     const fetchCloud = async () => {
       setSyncStatus("syncing")
+      const normalizedUrl = normalizeSyncUrl(syncSettings.url)
+      const trimmedKey = syncSettings.apiKey?.trim()
+
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" }
-        if (syncSettings.apiKey) {
-          headers["X-Master-Key"] = syncSettings.apiKey
-          headers["Authorization"] = `Bearer ${syncSettings.apiKey}`
+        if (trimmedKey) {
+          headers["X-Master-Key"] = trimmedKey
+          // Legacy support or alternative key patterns
+          if (!trimmedKey.startsWith("$")) {
+            headers["Authorization"] = `Bearer ${trimmedKey}`
+          }
         }
-        const res = await fetch(syncSettings.url, { method: "GET", headers })
-        if (!res.ok) throw new Error("Cloud sync fetch failed")
+        
+        console.log(`[CloudSync] Initial load from: ${normalizedUrl}`)
+        const res = await fetch(normalizedUrl, { method: "GET", headers })
+        
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          console.error("[CloudSync] Fetch failed:", res.status, errData)
+          throw new Error(errData.message || "Cloud sync fetch failed")
+        }
         
         let data = await res.json()
         // Handle common jsonbin.io response { record: [...] }
@@ -268,21 +292,29 @@ export default function Page() {
 
       setSyncStatus("syncing")
       debounceTimers.current["sync"]["push"] = setTimeout(async () => {
+        const normalizedUrl = normalizeSyncUrl(syncSettings.url)
+        const trimmedKey = syncSettings.apiKey?.trim()
+
         try {
           const headers: Record<string, string> = { "Content-Type": "application/json" }
-          if (syncSettings.apiKey) {
-            headers["X-Master-Key"] = syncSettings.apiKey
-            headers["Authorization"] = `Bearer ${syncSettings.apiKey}`
+          if (trimmedKey) {
+            headers["X-Master-Key"] = trimmedKey
+            if (!trimmedKey.startsWith("$")) {
+              headers["Authorization"] = `Bearer ${trimmedKey}`
+            }
           }
-          const res = await fetch(syncSettings.url, {
+          
+          console.log(`[CloudSync] Saving to: ${normalizedUrl}`)
+          const res = await fetch(normalizedUrl, {
             method: "PUT",
             headers,
             body: payloadStr
           })
           
           if (!res.ok) {
-            // Some bins require POST if not existing
-            throw new Error("PUT failed")
+            const errData = await res.json().catch(() => ({}))
+            console.error("[CloudSync] Save failed:", res.status, errData)
+            throw new Error(errData.message || "PUT failed")
           }
           lastSyncPayloadRef.current = payloadStr
           setSyncStatus("success")
