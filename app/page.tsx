@@ -233,18 +233,24 @@ export default function Page() {
       const trimmedKey = syncSettings.apiKey?.trim()
 
       try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        let headers: Record<string, string> = { "Content-Type": "application/json" }
         if (trimmedKey) {
           headers["X-Master-Key"] = trimmedKey
-          // Legacy support or alternative key patterns
           if (!trimmedKey.startsWith("$")) {
             headers["Authorization"] = `Bearer ${trimmedKey}`
           }
         }
         
         console.log(`[CloudSync] Initial load from: ${normalizedUrl}`)
-        const res = await fetch(normalizedUrl, { method: "GET", headers })
+        let res = await fetch(normalizedUrl, { method: "GET", headers })
         
+        // Auto-retry with X-Access-Key if jsonbin rejects X-Master-Key
+        if (res.status === 401 && trimmedKey?.startsWith("$") && normalizedUrl.includes("jsonbin")) {
+           console.log(`[CloudSync] X-Master-Key rejected. Trying X-Access-Key...`)
+           headers = { "Content-Type": "application/json", "X-Access-Key": trimmedKey }
+           res = await fetch(normalizedUrl, { method: "GET", headers })
+        }
+
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
           console.error("[CloudSync] Fetch failed:", res.status, errData)
@@ -296,7 +302,7 @@ export default function Page() {
         const trimmedKey = syncSettings.apiKey?.trim()
 
         try {
-          const headers: Record<string, string> = { "Content-Type": "application/json" }
+          let headers: Record<string, string> = { "Content-Type": "application/json" }
           if (trimmedKey) {
             headers["X-Master-Key"] = trimmedKey
             if (!trimmedKey.startsWith("$")) {
@@ -305,11 +311,22 @@ export default function Page() {
           }
           
           console.log(`[CloudSync] Saving to: ${normalizedUrl}`)
-          const res = await fetch(normalizedUrl, {
+          let res = await fetch(normalizedUrl, {
             method: "PUT",
             headers,
             body: payloadStr
           })
+
+          // Auto-retry with X-Access-Key if jsonbin rejects X-Master-Key
+          if (res.status === 401 && trimmedKey?.startsWith("$") && normalizedUrl.includes("jsonbin")) {
+            console.log(`[CloudSync] X-Master-Key rejected for save. Trying X-Access-Key...`)
+            headers = { "Content-Type": "application/json", "X-Access-Key": trimmedKey }
+            res = await fetch(normalizedUrl, {
+              method: "PUT",
+              headers,
+              body: payloadStr
+            })
+          }
           
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}))
