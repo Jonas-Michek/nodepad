@@ -21,14 +21,12 @@ interface GhostPanelProps {
 export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: GhostPanelProps) {
   return (
     <div
-      style={{
-        width: isOpen ? 272 : 0,
-        opacity: isOpen ? 1 : 0,
-        visibility: isOpen ? "visible" : "hidden",
-      }}
-      className="flex flex-col h-full bg-black/20 backdrop-blur-3xl border-l border-border shrink-0 overflow-hidden relative z-50 transition-all duration-200 ease-in-out"
+      className={`flex flex-col h-full bg-black/20 backdrop-blur-3xl border-l border-border shrink-0 overflow-hidden relative z-50 transition-[max-width,opacity,visibility] duration-200 ease-in-out ${
+        isOpen ? "w-full md:w-[272px] max-w-full md:max-w-[272px] opacity-100 visible" : "w-0 max-w-0 opacity-0 invisible"
+      }`}
+      data-mobile-full={isOpen}
     >
-      <div className="w-[272px] flex flex-col h-full">
+      <div className="w-screen md:w-[272px] flex flex-col h-full">
         {/* Header */}
         <div className="flex h-10 items-center justify-between border-b border-border bg-card/5 px-3 py-1.5 shrink-0">
           <div className="flex items-center gap-2">

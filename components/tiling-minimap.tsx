@@ -41,13 +41,13 @@ export function TilingMinimap({ pages, activePageIdx, onPageClick }: TilingMinim
                     Page {idx + 1} · {page.length} tile{page.length !== 1 ? "s" : ""}
                   </p>
                   <div className="flex flex-col gap-1.5">
-                    {page.map(block => {
-                      const config = CONTENT_TYPE_CONFIG[block.contentType]
-                      const title  = block.text.length > 48
-                        ? block.text.slice(0, 48) + "…"
-                        : block.text
+                    {page.map(item => {
+                      const config = CONTENT_TYPE_CONFIG[item.contentType]
+                      const title  = item.text.length > 48
+                        ? item.text.slice(0, 48) + "…"
+                        : item.text
                       return (
-                        <div key={block.id} className="flex items-start gap-1.5">
+                        <div key={item.id} className="flex items-start gap-1.5">
                           <div
                             className="h-[5px] w-[5px] rounded-[1px] shrink-0 mt-[3px]"
                             style={{ background: config.accentVar, opacity: 0.85 }}
@@ -76,11 +76,11 @@ export function TilingMinimap({ pages, activePageIdx, onPageClick }: TilingMinim
             >
               {/* Dot grid — up to 3 columns, rows as needed */}
               <div className="grid grid-cols-3 gap-[3px]">
-                {page.map(block => {
-                  const config = CONTENT_TYPE_CONFIG[block.contentType]
+                {page.map(item => {
+                  const config = CONTENT_TYPE_CONFIG[item.contentType]
                   return (
                     <div
-                      key={block.id}
+                      key={item.id}
                       className="h-[5px] w-[5px] rounded-[1px] transition-opacity duration-150"
                       style={{
                         background: config.accentVar,

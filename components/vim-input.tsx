@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Trello, Grid, Trash2, Clipboard, Download,
   FolderOpen, FolderPlus, BookOpen, Sparkles,
-  FolderDown, FolderInput, GitFork
+  FolderDown, FolderInput, GitFork, X
 } from "lucide-react"
 import { Command } from "cmdk"
 import { useModKey } from "@/lib/utils"
@@ -201,17 +201,25 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
         {/* ── Command Popup ──────────────────────────────────────────────── */}
         <AnimatePresence>
           {isCommandKOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute bottom-full left-0 right-0 w-full border-t border-white/10 bg-black/85 backdrop-blur-3xl shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.6)]"
-              onKeyDown={handlePopupKeyDown}
-            >
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[-1] bg-black/20"
+                onClick={() => setIsCommandKOpen(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute bottom-full left-0 right-0 w-full border-t border-white/10 bg-black/85 backdrop-blur-3xl shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.6)]"
+                onKeyDown={handlePopupKeyDown}
+              >
               {/* Search input */}
               <div className="flex items-center gap-3 px-5 py-3 border-b border-white/10">
-                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/60 select-none shrink-0">{mod}K</span>
+
                 <input
                   ref={searchInputRef}
                   value={search}
@@ -219,12 +227,19 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                   placeholder="Search commands…"
                   className="flex-1 bg-transparent font-mono text-xs text-white/70 placeholder:text-white/55 outline-none"
                 />
-                {search && (
+                {search ? (
                   <button
                     onClick={() => setSearch("")}
                     className="text-white/40 hover:text-white/70 transition-colors text-[10px] font-mono"
                   >
                     clear
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsCommandKOpen(false)}
+                    className="text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -337,6 +352,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                 ))}
               </div>
             </motion.div>
+            </>
           )}
         </AnimatePresence>
 
@@ -359,27 +375,8 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <kbd className="flex h-5 items-center rounded border border-white/10 bg-white/5 px-1.5 font-mono text-[9px] text-white/60">
-                <span className="text-[11px] mr-1">⌘</span>
-                <span>Z</span>
-              </kbd>
-              <span className="text-[9px] font-mono font-bold text-white/55 uppercase tracking-tighter">Undo</span>
-            </div>
-
-            <div className="h-4 w-px bg-white/10" />
-
-            <div className="flex items-center gap-2">
-              <kbd className="flex h-5 items-center rounded border border-white/10 bg-white/5 px-1.5 font-mono text-[9px] text-white/60">
-                <span className="text-[11px] mr-1">⌘</span>
-                <span>K</span>
-              </kbd>
-              <span className="text-[9px] font-mono font-bold text-white/55 uppercase tracking-tighter">Commands</span>
-            </div>
-
-            <div className="h-4 w-px bg-white/20" />
-
             <button
+
               onClick={() => {
                 if (value.trim()) {
                   onSubmit(value.trim())

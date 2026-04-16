@@ -116,23 +116,23 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
             categories.map(([cat, catBlocks]) => (
               <div key={cat} className="space-y-1">
                 <h4 className="px-2.5 text-[8px] font-mono font-bold text-muted-foreground/50 uppercase tracking-widest mb-1">{cat}</h4>
-                {catBlocks.map(block => (
+                {catBlocks.map(item => (
                    <button
-                    key={block.id}
-                    onMouseEnter={() => onHighlight(block.id)}
+                    key={item.id}
+                    onMouseEnter={() => onHighlight(item.id)}
                     onMouseLeave={() => onHighlight(null)}
-                    onClick={() => scrollToTile(block.id)}
+                    onClick={() => scrollToTile(item.id)}
                     className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-sm transition-all hover:bg-white/5 text-left group border-r-2 ${
-                      highlightedId === block.id 
+                      highlightedId === item.id 
                         ? "bg-primary/10 border-primary shadow-[inset_0_1px_0px_rgba(255,255,255,0.05)]" 
                         : "border-transparent text-foreground/60 hover:text-foreground"
                     }`}
                   >
                     <div className="mt-0.5 shrink-0 transition-transform group-hover:scale-110">
-                      {getIcon(block.contentType)}
+                      {getIcon(item.contentType)}
                     </div>
                     <span className="font-mono text-[10px] font-bold truncate leading-tight">
-                      {block.text.substring(0, 35) || "Empty note"}
+                      {item.text.substring(0, 35) || "Empty note"}
                     </span>
                   </button>
                 ))}

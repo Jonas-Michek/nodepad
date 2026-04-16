@@ -62,16 +62,16 @@ export function KanbanArea({
       thesis: { title: "Thesis", icon: Sparkles, blocks: [] }
     }
 
-    blocks.forEach(block => {
-      if (block.isEnriching) {
-        cols.processing.blocks.push(block)
+    blocks.forEach(item => {
+      if (item.isEnriching) {
+        cols.processing.blocks.push(item)
       } else {
-        const type = block.contentType || "general"
+        const type = item.contentType || "general"
         if (!cols[type]) {
           const config = CONTENT_TYPE_CONFIG[type as ContentType] || CONTENT_TYPE_CONFIG.general
           cols[type] = { title: config.label, icon: config.icon, blocks: [] }
         }
-        cols[type].blocks.push(block)
+        cols[type].blocks.push(item)
       }
     })
 
@@ -140,15 +140,15 @@ export function KanbanArea({
 
               {/* Column Content */}
               <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1 pb-4">
-                {col.blocks.map(block => {
-                  const collapsed = collapsedIds.has(block.id)
+                {col.blocks.map(item => {
+                  const collapsed = collapsedIds.has(item.id)
                   return (
                     <div
-                      key={block.id}
-                      className={`shrink-0 transition-[height,opacity,filter] duration-300 ${collapsed ? 'h-[38px]' : ''} ${activeConnectionId && !relatedIds.has(block.id) ? 'opacity-15 saturate-0' : 'opacity-100'}`}
+                      key={item.id}
+                      className={`shrink-0 transition-[height,opacity,filter] duration-300 ${collapsed ? 'h-[38px]' : ''} ${activeConnectionId && !relatedIds.has(item.id) ? 'opacity-15 saturate-0' : 'opacity-100'}`}
                     >
                       <TileCard
-                        block={block}
+                        block={item}
                         isCollapsed={collapsed}
                         onDelete={onDelete}
                         onEdit={onEdit}
@@ -156,11 +156,12 @@ export function KanbanArea({
                         onReEnrich={onReEnrich}
                         onChangeType={onChangeType}
                         onToggleCollapse={onToggleCollapse}
+                        onTogglePin={onTogglePin}
                         onToggleSubTask={onToggleSubTask}
                         onDeleteSubTask={onDeleteSubTask}
                         onConnectionHover={handleConnectionHover}
                         onConnectionLock={handleConnectionLock}
-                        isConnectionLocked={lockedConnectionId === block.id}
+                        isConnectionLocked={lockedConnectionId === item.id}
                         allBlocks={blocks}
                       />
                     </div>

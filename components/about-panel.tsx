@@ -226,21 +226,24 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
               <div className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
                 <Layers className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-0.5">Tiling <span className="font-mono text-[10px] text-muted-foreground/50 ml-1">{mod}1</span></p>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Tiling</p>
+
                   <p className="text-sm text-muted-foreground">Default. Nodes are laid out in a Binary Space Partition grid — each new node splits the available space. Navigate pages horizontally. A minimap in the bottom-right shows your spatial position.</p>
                 </div>
               </div>
               <div className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
                 <Kanban className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-0.5">Kanban <span className="font-mono text-[10px] text-muted-foreground/50 ml-1">{mod}2</span></p>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Kanban</p>
+
                   <p className="text-sm text-muted-foreground">Nodes grouped into columns by content type. Good for reviewing your thinking by category. Tasks always appear first.</p>
                 </div>
               </div>
               <div className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
                 <GitFork className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-0.5">Graph <span className="font-mono text-[10px] text-muted-foreground/50 ml-1">{mod}3</span></p>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Graph</p>
+
                   <p className="text-sm text-muted-foreground">An interactive force-directed graph of all your nodes. Connections between them become the focus — highly-connected nodes drift toward the centre, isolated ones settle at the periphery. Click any node to open its full detail panel. Hover to dim unrelated nodes.</p>
                 </div>
               </div>
@@ -295,17 +298,7 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
             </div>
           </Section>
 
-          {/* Keyboard shortcuts */}
-          <Section title="Keyboard shortcuts">
-            <div className="rounded-sm border border-border overflow-hidden">
-              <div className="px-3 divide-y divide-border/40">
-                <Shortcut keys={[mod, "K"]} label="Command menu" />
-                <Shortcut keys={[mod, "Z"]} label="Undo last action" />
-                <Shortcut keys={["Enter"]} label="Submit a new node" />
-                <Shortcut keys={["Esc"]} label="Close command menu / deselect" />
-              </div>
-            </div>
-          </Section>
+
 
           {/* Tips */}
           <Section title="Tips">
@@ -313,8 +306,8 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
               {[
                 "Write in fragments — nodepad handles the structure. You don't need to write in full sentences.",
                 "Mix types freely. A canvas with claims, questions, and quotes is richer than one with only one type.",
-                "Switch to Graph view (via ⌘K → Graph) to understand which nodes are central to your thinking and which are peripheral.",
-                "The canvas index (⌘K → Index) groups nodes by category — hovering a title in the index highlights the matching node in any view.",
+                "Switch to Graph view (via TOOLS → Graph) to understand which nodes are central to your thinking and which are peripheral.",
+                "The canvas index (via Index button) groups nodes by category — hovering a title in the index highlights the matching node in any view.",
                 "Pin important nodes with the pin icon in Tiling view so they stand out visually.",
                 "Tasks added to the canvas become a sub-task list — add sub-tasks by nesting them in the tile.",
                 "Use multiple projects (sidebar) to keep separate research threads isolated.",

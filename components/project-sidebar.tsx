@@ -18,6 +18,8 @@ import {
   EyeOff,
   Save,
   FolderInput,
+  Sparkles,
+  HelpCircle,
 } from "lucide-react"
 import {
   AI_PROVIDER_PRESETS,
@@ -46,14 +48,19 @@ interface ProjectSidebarProps {
   onImportProject: () => void
   onRenameProject: (id: string, newName: string) => void
   onDeleteProject: (id: string) => void
-  openToSettings?: boolean
-  onSettingsOpened?: () => void
+  showSettings: boolean
+  onShowSettingsChange: (val: boolean) => void
   // AI Settings
   aiSettings: AISettings
   onUpdateAISettings: (patch: Partial<AISettings>) => void
   // Sync Settings
   syncSettings: SyncSettings
   onUpdateSyncSettings: (patch: Partial<SyncSettings>) => void
+  onGhostPanelToggle: () => void
+  ghostNoteCount: number
+  onAboutClick: () => void
+  highlightedSection?: { section: "ai" | "cloud", timestamp: number } | null
+  className?: string
 }
 
 export function ProjectSidebar({
@@ -70,13 +77,17 @@ export function ProjectSidebar({
   onUpdateAISettings,
   syncSettings,
   onUpdateSyncSettings,
-  openToSettings,
-  onSettingsOpened,
+  onGhostPanelToggle,
+  ghostNoteCount,
+  onAboutClick,
+  showSettings,
+  onShowSettingsChange,
+  highlightedSection,
+  className = "",
 }: ProjectSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
   const [providerOpen, setProviderOpen] = useState(false)
@@ -84,6 +95,8 @@ export function ProjectSidebar({
   const [draft, setDraft] = useState<AISettings>(aiSettings)
   const [syncDraft, setSyncDraft] = useState<SyncSettings>(syncSettings)
   const [showSyncKey, setShowSyncKey] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+  const [cloudOpen, setCloudOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -101,13 +114,29 @@ export function ProjectSidebar({
     }
   }, [showSettings, aiSettings, syncSettings])
 
-  // Jump straight to settings when requested externally
+  // Auto-expand and highlight when triggered from navbar
   useEffect(() => {
-    if (openToSettings) {
-      setShowSettings(true)
-      onSettingsOpened?.()
+    if (!highlightedSection) return
+
+    if (highlightedSection.section === 'ai') {
+      if (aiOpen) {
+        setAiOpen(false)
+        if (!cloudOpen) setTimeout(onClose, 200)
+      } else {
+        setAiOpen(true)
+      }
     }
-  }, [openToSettings])
+    if (highlightedSection.section === 'cloud') {
+      if (cloudOpen) {
+        setCloudOpen(false)
+        if (!aiOpen) setTimeout(onClose, 200)
+      } else {
+        setCloudOpen(true)
+      }
+    }
+  }, [highlightedSection])
+
+
 
   const handleRename = (id: string) => {
     if (editName.trim()) onRenameProject(id, editName.trim())
@@ -135,7 +164,7 @@ export function ProjectSidebar({
 
   const handleSaveSettings = () => {
     persistSettings()
-    setShowSettings(false)
+    onShowSettingsChange(false)
   }
 
   // Auto-save settings when the sidebar closes or when navigating back,
@@ -150,14 +179,28 @@ export function ProjectSidebar({
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
 
   return (
-    <div
-      className={`relative z-50 transition-[max-width,opacity,visibility] duration-200 ease-in-out overflow-hidden border-r border-border bg-black/90 md:bg-black/20 backdrop-blur-3xl flex flex-col h-full shrink-0 ${
-        isOpen ? "max-w-full md:max-w-[240px] w-full md:w-[240px] opacity-100 visible" : "max-w-0 w-0 opacity-0 invisible"
-      }`}
+    <motion.div
+      initial={false}
+      animate={{ 
+        width: isOpen ? (typeof window !== 'undefined' && window.innerWidth < 768 ? '100dvw' : 240) : 0,
+        opacity: isOpen ? 1 : 0,
+        x: isOpen ? 0 : -20
+      }}
+      transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+      className={`relative z-50 overflow-hidden border-l md:border-l-0 md:border-r border-border bg-black/90 md:bg-black/20 backdrop-blur-3xl flex flex-col h-full shrink-0 ${
+        isOpen ? "visible" : "invisible"
+      } ${className}`}
     >
       <div className="w-screen md:w-[240px] flex flex-col h-full shrink-0">
         {/* Header */}
         <div className="flex h-10 items-center justify-between border-b border-border bg-card/5 backdrop-blur-md px-3 py-1.5 shrink-0">
+          <button
+            onClick={handleClose}
+            className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+
           <div className="flex items-center gap-2.5">
             {showSettings ? (
               <button
@@ -169,21 +212,15 @@ export function ProjectSidebar({
               </button>
             ) : (
               <>
-                <div className="flex items-center justify-center h-5 w-5 bg-primary/10 rounded-sm">
-                  <LayoutGrid className="h-3.5 w-3.5 text-primary" />
-                </div>
                 <h2 className="font-mono text-xs font-bold uppercase tracking-tight text-foreground/80 select-none">
                   Spaces
                 </h2>
+                <div className="flex items-center justify-center h-5 w-5 bg-primary/10 rounded-sm">
+                  <LayoutGrid className="h-3.5 w-3.5 text-primary" />
+                </div>
               </>
             )}
           </div>
-          <button
-            onClick={handleClose}
-            className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
         </div>
 
         {/* Content — animated slide between projects/settings */}
@@ -198,6 +235,24 @@ export function ProjectSidebar({
                 transition={{ duration: 0.15 }}
                 className="absolute inset-0 overflow-y-auto px-2 py-2 space-y-0.5 custom-scrollbar"
               >
+                {/* Synthesis Button */}
+                <button
+                  onClick={onGhostPanelToggle}
+                  className="w-full flex items-center justify-between p-2 px-2.5 mb-2 rounded-sm bg-primary/10 hover:bg-primary/20 transition-all duration-150 group border border-primary/20 border-dashed"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-5 w-5 bg-primary/20 rounded-sm">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    <span className="font-mono text-[12px] font-bold text-primary italic uppercase tracking-wider">Synthesis</span>
+                  </div>
+                  {ghostNoteCount > 0 && (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-mono text-[9px] font-black text-primary-foreground">
+                      {ghostNoteCount}
+                    </span>
+                  )}
+                </button>
+
                 {projects.map((project) => (
                   <div 
                     key={project.id}
@@ -305,254 +360,314 @@ export function ProjectSidebar({
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: 20, opacity: 0 }}
                 transition={{ duration: 0.15 }}
-                className="absolute inset-0 overflow-y-auto px-3 py-4 flex flex-col gap-5 custom-scrollbar"
+                className="relative h-full overflow-y-auto px-3 py-4 flex flex-col gap-4 custom-scrollbar"
               >
-                {/* Provider Selector */}
-                <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    Provider
-                  </label>
-                  <div className="relative">
-                    <button
-                      onClick={() => setProviderOpen(v => !v)}
-                      className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
-                    >
-                      <span className="font-mono text-[11px] font-bold text-foreground">{currentPreset.label}</span>
-                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`} />
-                    </button>
-                    <AnimatePresence>
-                      {providerOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          transition={{ duration: 0.1 }}
-                          className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
-                        >
-                          {AI_PROVIDER_PRESETS.map(preset => (
-                            <button
-                              key={preset.id}
-                              onClick={() => {
-                                const newModels = getModelsForProvider(preset.id)
-                                setDraft(d => ({
-                                  ...d,
-                                  provider: preset.id,
-                                  modelId: newModels[0]?.id ?? d.modelId,
-                                  webGrounding: d.webGrounding,
-                                  customBaseUrl: "",
-                                  // Restore the saved key for this provider if one exists,
-                                  // otherwise clear so the user knows to enter a new one.
-                                  apiKey: d.providerKeys?.[preset.id] ?? "",
-                                }))
-                                setProviderOpen(false)
-                              }}
-                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
-                            >
-                              <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                draft.provider === preset.id ? "border-primary bg-primary/20" : "border-white/10"
-                              }`}>
-                                {draft.provider === preset.id && <Check className="h-2.5 w-2.5 text-primary" />}
-                              </div>
-                              <span className="font-mono text-[10px] font-bold text-foreground">{preset.label}</span>
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-
-                {/* API Key */}
-                <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    API Key
-                  </label>
-                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                    <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={draft.apiKey}
-                      onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
-                      placeholder={currentPreset.keyPlaceholder || "Your API key"}
-                      className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                      style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button onClick={() => setShowKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
-                      {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    </button>
-                  </div>
-                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
-                    Stored locally. Never sent to a server.{" "}
-                    {currentPreset.keyUrl && (
-                      <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-primary underline hover:brightness-125 transition-all">
-                        Get a key →
-                      </a>
-                    )}
-                  </p>
-                </div>
-
-                {/* Model Selector */}
-                <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    Model
-                  </label>
-                  {models.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                      <input
-                        type="text"
-                        value={draft.modelId}
-                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
-                        placeholder="e.g. gpt-4o, claude-3-opus-20240229"
-                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
+                <div className="pb-32 flex flex-col gap-6">
+                <motion.div 
+                  className="flex flex-col gap-4 rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden transition-colors"
+                  animate={highlightedSection?.section === 'ai' ? { 
+                    borderColor: ["#1e1e20", "#22c55e", "#1e1e20"],
+                    backgroundColor: ["rgba(255,255,255,0.02)", "rgba(34,197,94,0.05)", "rgba(255,255,255,0.02)"],
+                    boxShadow: ["0 0 0px rgba(34,197,94,0)", "0 0 20px rgba(34,197,94,0.2)", "0 0 0px rgba(34,197,94,0)"]
+                  } : {}}
+                  transition={{ duration: 1, repeat: 1 }}
+                >
+                  <button 
+                    onClick={() => setAiOpen(!aiOpen)}
+                    className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-foreground">AI Settings</span>
                     </div>
-                  ) : (
-                    <div className="relative">
-                      <button
-                        onClick={() => setModelOpen(v => !v)}
-                        className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                    <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {aiOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                       >
-                        <div>
-                          <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
-                          <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel?.description ?? "Custom model ID"}</div>
-                        </div>
-                        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
-                      </button>
-                      <AnimatePresence>
-                        {modelOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.1 }}
-                            className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
-                          >
-                            {models.map(model => (
+                        <div className="px-3 pb-4 space-y-5">
+                          {/* Provider Selector */}
+                          <div className="flex flex-col gap-2">
+                            <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                              Provider
+                            </label>
+                            <div className="relative">
                               <button
-                                key={model.id}
-                                onClick={() => {
-                                  setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
-                                  setModelOpen(false)
-                                }}
-                                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                                onClick={() => setProviderOpen(v => !v)}
+                                className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
                               >
-                                <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                  draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
-                                }`}>
-                                  {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
-                                </div>
-                                <div>
-                                  <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
-                                  <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
-                                </div>
-                                {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
+                                <span className="font-mono text-[11px] font-bold text-foreground">{currentPreset.label}</span>
+                                <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`} />
                               </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
+                              <AnimatePresence>
+                                {providerOpen && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                                  >
+                                    {AI_PROVIDER_PRESETS.map(preset => (
+                                      <button
+                                        key={preset.id}
+                                        onClick={() => {
+                                          const newModels = getModelsForProvider(preset.id)
+                                          setDraft(d => ({
+                                            ...d,
+                                            provider: preset.id,
+                                            modelId: newModels[0]?.id ?? d.modelId,
+                                            webGrounding: d.webGrounding,
+                                            customBaseUrl: "",
+                                            apiKey: d.providerKeys?.[preset.id] ?? "",
+                                          }))
+                                          setProviderOpen(false)
+                                        }}
+                                        className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                                      >
+                                        <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                          draft.provider === preset.id ? "border-primary bg-primary/20" : "border-white/10"
+                                        }`}>
+                                          {draft.provider === preset.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                                        </div>
+                                        <span className="font-mono text-[10px] font-bold text-foreground">{preset.label}</span>
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          </div>
 
-                {/* Web Grounding (OpenRouter + OpenAI) */}
-                {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
-                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
-                    <div className="flex items-start gap-2">
-                      <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
-                      <div>
-                        <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
-                        <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
-                          {selectedModel.supportsGrounding
-                            ? draft.provider === "openai"
-                              ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
-                              : "Adds :online for live search"
-                            : "Not available for this model"}
+                          {/* API Key */}
+                          <div className="flex flex-col gap-2">
+                            <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                              API Key
+                            </label>
+                            <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                              <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <input
+                                type="text"
+                                value={draft.apiKey}
+                                onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
+                                placeholder={currentPreset.keyPlaceholder || "Your API key"}
+                                className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                                style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                              <button onClick={() => setShowKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
+                                {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              </button>
+                            </div>
+                            <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                              Stored locally. Never sent to a server.{" "}
+                              {currentPreset.keyUrl && (
+                                <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
+                                  className="text-primary underline hover:brightness-125 transition-all">
+                                  Get a key →
+                                </a>
+                              )}
+                            </p>
+                          </div>
+
+                          {/* Model Selector */}
+                          <div className="flex flex-col gap-2">
+                            <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                              Model
+                            </label>
+                            {models.length === 0 ? (
+                              <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                                <input
+                                  type="text"
+                                  value={draft.modelId}
+                                  onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                                  placeholder="e.g. gpt-4o, claude-3-opus-20240229"
+                                  className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                              </div>
+                            ) : (
+                              <div className="relative">
+                                <button
+                                  onClick={() => setModelOpen(v => !v)}
+                                  className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                                >
+                                  <div>
+                                    <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
+                                    <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel?.description ?? "Custom model ID"}</div>
+                                  </div>
+                                  <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
+                                </button>
+                                <AnimatePresence>
+                                  {modelOpen && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -4 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -4 }}
+                                      transition={{ duration: 0.1 }}
+                                      className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                                    >
+                                      {models.map(model => (
+                                        <button
+                                          key={model.id}
+                                          onClick={() => {
+                                            setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
+                                            setModelOpen(false)
+                                          }}
+                                          className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                                        >
+                                          <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                            draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
+                                          }`}>
+                                            {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                                          </div>
+                                          <div>
+                                            <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
+                                            <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
+                                          </div>
+                                          {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
+                                        </button>
+                                      ))}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Web Grounding (OpenRouter + OpenAI) */}
+                          {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
+                            <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                                <div>
+                                  <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
+                                  <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                                    {selectedModel.supportsGrounding
+                                      ? draft.provider === "openai"
+                                        ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
+                                        : "Adds :online for live search"
+                                      : "Not available for this model"}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
+                                disabled={!selectedModel.supportsGrounding}
+                                className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                                  draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
+                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                              >
+                                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                                  draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
+                                }`} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* API Status */}
+                          <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+                            draft.apiKey
+                              ? "bg-primary/10 border border-primary/20 text-primary"
+                              : "bg-white/5 border border-white/5 text-muted-foreground"
+                          }`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
+                            {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
-                      disabled={!selectedModel.supportsGrounding}
-                      className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
-                      } disabled:opacity-30 disabled:cursor-not-allowed`}
-                    >
-                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
-                      }`} />
-                    </button>
-                  </div>
-                )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
 
-                {/* API Status */}
-                <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
-                    ? "bg-primary/10 border border-primary/20 text-primary"
-                    : "bg-white/5 border border-white/5 text-muted-foreground"
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                <motion.div 
+                  className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden transition-colors"
+                  animate={highlightedSection?.section === 'cloud' ? { 
+                    borderColor: ["#1e1e20", "#22c55e", "#1e1e20"],
+                    backgroundColor: ["rgba(255,255,255,0.02)", "rgba(34,197,94,0.05)", "rgba(255,255,255,0.02)"],
+                    boxShadow: ["0 0 0px rgba(34,197,94,0)", "0 0 20px rgba(34,197,94,0.2)", "0 0 0px rgba(34,197,94,0)"]
+                  } : {}}
+                  transition={{ duration: 1, repeat: 1 }}
+                >
+                  <button 
+                    onClick={() => setCloudOpen(!cloudOpen)}
+                    className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-foreground">Cloud Settings</span>
+                    </div>
+                    <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${cloudOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {cloudOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <div className="px-3 pb-4 space-y-4">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                              <input
+                                type="url"
+                                value={syncDraft.url}
+                                onChange={e => setSyncDraft(d => ({ ...d, url: e.target.value }))}
+                                placeholder="https://api.jsonbin.io/v3/b/..."
+                                className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                            </div>
+                            <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                              GET/PUT JSON Endpoint URL.{" "}
+                              <a href="https://jsonbin.io/" target="_blank" rel="noopener noreferrer"
+                                className="text-primary underline hover:brightness-125 transition-all">
+                                Get an endpoint →
+                              </a>
+                            </p>
+
+                            <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                              <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <input
+                                type="text"
+                                value={syncDraft.apiKey}
+                                onChange={e => setSyncDraft(d => ({ ...d, apiKey: e.target.value }))}
+                                placeholder="API Key / Auth Header (Optional)"
+                                className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                                style={showSyncKey ? undefined : { WebkitTextSecurity: "disc" } as never}
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                              <button onClick={() => setShowSyncKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Toggle visibility">
+                                {showSyncKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              </button>
+                            </div>
+                            <div className={`flex items-center gap-2 mt-1 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+                              syncDraft.url
+                                ? "bg-primary/10 border border-primary/20 text-primary"
+                                : "bg-white/5 border border-white/5 text-muted-foreground"
+                            }`}>
+                              {syncDraft.url ? <Cloud className="h-2.5 w-2.5 shrink-0" /> : <CloudOff className="h-2.5 w-2.5 shrink-0" />}
+                              {syncDraft.url ? "Cloud sync enabled" : "Sync disabled"}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
                 </div>
-
-                <div className="h-px bg-white/5 my-2" />
-
-                {/* Cloud Sync section */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                      Cloud Sync
-                    </label>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                      <input
-                        type="url"
-                        value={syncDraft.url}
-                        onChange={e => setSyncDraft(d => ({ ...d, url: e.target.value }))}
-                        placeholder="https://api.jsonbin.io/v3/b/..."
-                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                    </div>
-                    <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
-                      GET/PUT JSON Endpoint URL.
-                    </p>
-
-                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                      <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={syncDraft.apiKey}
-                        onChange={e => setSyncDraft(d => ({ ...d, apiKey: e.target.value }))}
-                        placeholder="API Key / Auth Header (Optional)"
-                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                        style={showSyncKey ? undefined : { WebkitTextSecurity: "disc" } as never}
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                      <button onClick={() => setShowSyncKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Toggle visibility">
-                        {showSyncKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                      </button>
-                    </div>
-                    <div className={`flex items-center gap-2 mt-1 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                      syncDraft.url
-                        ? "bg-primary/10 border border-primary/20 text-primary"
-                        : "bg-white/5 border border-white/5 text-muted-foreground"
-                    }`}>
-                      {syncDraft.url ? <Cloud className="h-2.5 w-2.5 shrink-0" /> : <CloudOff className="h-2.5 w-2.5 shrink-0" />}
-                      {syncDraft.url ? "Cloud sync enabled" : "Sync disabled"}
-                    </div>
-                  </div>
-                </div>
-
               </motion.div>
             )}
           </AnimatePresence>
@@ -570,7 +685,7 @@ export function ProjectSidebar({
                 <Save className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => setShowSettings(false)}
+                onClick={() => onShowSettingsChange(false)}
                 className="flex items-center justify-center w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
               >
                 Cancel
@@ -594,7 +709,15 @@ export function ProjectSidebar({
                 <FolderInput className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => setShowSettings(true)}
+                onClick={onAboutClick}
+                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
+              >
+                <span>About nodepad</span>
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-px bg-white/5 my-1" />
+              <button
+                onClick={() => onShowSettingsChange(true)}
                 className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
               >
                 <span>Settings</span>
@@ -604,6 +727,6 @@ export function ProjectSidebar({
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
