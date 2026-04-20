@@ -5,7 +5,7 @@ import type { TextBlock } from "@/components/tile-card"
 import type { GhostNote } from "@/components/ghost-panel"
 import type { ContentType } from "@/lib/content-types"
 import { INITIAL_PROJECTS } from "@/lib/initial-data"
-import { useAISettings } from "@/lib/ai-settings"
+import { useAISettings, getModelsForProvider } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
 import { useSyncSettings } from "@/lib/sync-settings"
@@ -28,6 +28,27 @@ function generateId() {
   return Math.random().toString(36).substring(2, 10)
 }
 
+function parseSubTasks(text: string, existingSubTasks?: { id: string; text: string; isDone: boolean; timestamp: number }[]) {
+  const lines = text.split('\n').filter(t => t.trim().length > 0)
+  return lines.map(line => {
+    const rawText = line.trim()
+    const isDone = rawText.toLowerCase().startsWith("[x]")
+    const cleanText = rawText.replace(/^\[[\sx]?\]\s*/i, "").replace(/^(todo|fixme|hack)\s*/i, "").trim() || rawText
+    
+    const existing = existingSubTasks?.find(st => st.text === cleanText)
+    if (existing) {
+      return { ...existing, isDone: isDone || existing.isDone }
+    }
+    
+    return {
+      id: generateId(),
+      text: cleanText,
+      isDone,
+      timestamp: Date.now()
+    }
+  })
+}
+
 export function useNodepad() {
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string>("")
@@ -44,7 +65,7 @@ export function useNodepad() {
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
   const [highlightedSection, setHighlightedSection] = useState<{ section: "ai" | "cloud", timestamp: number } | null>(null)
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
-  const { settings, updateSettings, resolvedModelId, currentModel, isHydrated } = useAISettings()
+  const { settings, updateSettings, resolvedModelId, currentModel, isHydrated, markModelAsExhausted } = useAISettings()
   const { settings: syncSettings, updateSettings: updateSyncSettings, isHydrated: isSyncHydrated } = useSyncSettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
 
@@ -115,6 +136,9 @@ export function useNodepad() {
       try {
         initialProjects = JSON.parse(savedProjects)
         initialActiveId = savedActiveId || initialProjects[0]?.id || ""
+        if (!initialProjects.some(p => p.id === initialActiveId)) {
+          initialActiveId = initialProjects[0]?.id || ""
+        }
       } catch (e) {
         console.error("Failed to parse saved projects", e)
       }
@@ -158,7 +182,7 @@ export function useNodepad() {
   }, [])
 
   useEffect(() => {
-    if (!isSyncHydrated || !syncSettings.url || isInitialCloudLoadDone.current) return
+    if (!isSyncHydrated || !syncSettings.enabled || !syncSettings.url || isInitialCloudLoadDone.current) return
     let isSubscribed = true
 
     const fetchCloud = async () => {
@@ -190,7 +214,7 @@ export function useNodepad() {
         if (Array.isArray(data) && data.length > 0 && isSubscribed) {
           lastSyncPayloadRef.current = JSON.stringify(data)
           setProjects(data)
-          setActiveProjectId(data[0].id)
+          setActiveProjectId(prev => data.some((p: Project) => p.id === prev) ? prev : data[0].id)
           setSyncStatus("success")
         }
       } catch (err) {
@@ -211,7 +235,7 @@ export function useNodepad() {
     localStorage.setItem("nodepad-projects", payloadStr)
     localStorage.setItem("nodepad-active-project", activeProjectId)
 
-    if (syncSettings.url && isInitialCloudLoadDone.current && payloadStr !== lastSyncPayloadRef.current) {
+    if (syncSettings.enabled && syncSettings.url && isInitialCloudLoadDone.current && payloadStr !== lastSyncPayloadRef.current) {
       if (debounceTimers.current["sync"]) clearTimeout(debounceTimers.current["sync"]["push"])
       if (!debounceTimers.current["sync"]) debounceTimers.current["sync"] = {}
 
@@ -264,6 +288,7 @@ export function useNodepad() {
 
   // Ghost logic...
   const generateGhostNote = useCallback(async (projectId: string) => {
+    if (!settings.enabled) return
     const targetProject = projectsRef.current.find(p => p.id === projectId)
     if (!targetProject) return
     const enrichedBlocks = targetProject.blocks.filter(b => !b.isEnriching && b.category)
@@ -300,8 +325,21 @@ export function useNodepad() {
           lastGhostTexts: [...(p.lastGhostTexts || []), data.text].slice(-10),
         }
       }))
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
+      const errorMsg = e?.message || ""
+      const isRateLimited = errorMsg.includes("Too many requests") || errorMsg.includes("Insufficient credits") || errorMsg.includes("rate-limiting")
+
+      if (isRateLimited && settings.modelId) {
+        markModelAsExhausted(settings.modelId)
+        // Fallback to Lite model
+        const models = getModelsForProvider(settings.provider)
+        const liteModel = models.find(m => m.id.includes("flash-lite") || m.id.includes("lite")) || models[models.length - 1]
+        if (liteModel && liteModel.id !== settings.modelId) {
+          updateSettings({ modelId: liteModel.id })
+        }
+      }
+
       setProjects(prev => prev.map(p => p.id === projectId
         ? { ...p, ghostNotes: (p.ghostNotes || []).filter(n => n.id !== ghostId) }
         : p
@@ -309,9 +347,89 @@ export function useNodepad() {
     } finally {
       generatingRef.current.delete(projectId)
     }
-  }, [])
+  }, [settings.enabled])
 
-  const enrichBlock = useCallback(async (projectId: string, id: string, text: string, category?: string, forcedType?: string) => {
+  // Clear AI errors across all projects when AI is turned off
+  // Also retroactively parse subTasks for any existing tasks that lack them
+  useEffect(() => {
+    setProjects((current: Project[]) => {
+      let changed = false
+      const next = current.map(proj => {
+        let projChanged = false
+        const nextBlocks = proj.blocks.map(b => {
+          let updatedBlock = { ...b }
+          let blockChanged = false
+          
+          if (!settings.enabled && (b.isError || b.isEnriching)) {
+            updatedBlock = { ...updatedBlock, isError: false, isEnriching: false, statusText: undefined }
+            blockChanged = true
+          }
+          
+          if (b.contentType === "task" && !b.subTasks) {
+            updatedBlock = { ...updatedBlock, subTasks: parseSubTasks(b.text) }
+            blockChanged = true
+          }
+          
+          if (blockChanged) {
+            projChanged = true
+            return updatedBlock
+          }
+          return b
+        })
+        if (projChanged) changed = true
+        return projChanged ? { ...proj, blocks: nextBlocks } : proj
+      })
+      return changed ? next : current
+    })
+  }, [settings.enabled])
+
+    const enrichBlock = useCallback(async (projectId: string, id: string, text: string, category?: string, forcedType?: string, forceEnrich: boolean = false) => {
+    if (!settings.enabled && !forceEnrich) {
+      setProjects((current: Project[]) => current.map(proj => {
+        if (proj.id !== projectId) return proj
+        const block = proj.blocks.find(b => b.id === id)
+        if (!block) return proj
+
+        const isTask = block.contentType === "task" || forcedType === "task"
+        if (isTask) {
+          // Offline merging: Merge into the first existing task tile WITH THE SAME CATEGORY
+          // Use block.category (already set in addBlock) or the passed category
+          const targetCategory = block.category || category
+          const mergeTarget = proj.blocks.find(b => 
+            b.id !== id && 
+            b.contentType === "task" && 
+            (b.category === targetCategory || (!b.category && !targetCategory))
+          )
+          
+          if (mergeTarget) {
+            const mergedText = mergeTarget.text + "\n" + block.text
+            return {
+              ...proj,
+              blocks: proj.blocks
+                .filter(b => b.id !== id)
+                .map(b => b.id === mergeTarget.id ? { 
+                  ...b, 
+                  text: mergedText, 
+                  subTasks: parseSubTasks(mergedText, b.subTasks) 
+                } : b)
+            }
+          }
+        }
+
+        // No merge target or not a task: just finalize
+        return {
+          ...proj,
+          blocks: proj.blocks.map(b => b.id === id ? { 
+            ...b, 
+            isEnriching: false, 
+            isError: false, 
+            statusText: undefined, 
+            subTasks: b.contentType === "task" ? parseSubTasks(b.text, b.subTasks) : b.subTasks 
+          } : b)
+        }
+      }))
+      return
+    }
     const targetProject = projectsRef.current.find(p => p.id === projectId)
     if (!targetProject) return
 
@@ -325,42 +443,104 @@ export function useNodepad() {
       const influencedBy = data.influencedByIndices ? (data.influencedByIndices as number[]).map((idx) => context[idx]?.id).filter(Boolean) as string[] : []
 
       setProjects((current: Project[]) => {
-        const mergeTargetIdx = data.mergeWithIndex
-        const mergeTargetId = mergeTargetIdx !== null && context[mergeTargetIdx] ? context[mergeTargetIdx].id : null
+        let mergeTargetId = data.mergeWithIndex !== null && context[data.mergeWithIndex] ? context[data.mergeWithIndex].id : null
+
+        const targetProject = current.find(p => p.id === projectId)
+        if (targetProject && category && (forcedType === "task" || data.contentType === "task")) {
+          const existingCategorized = targetProject.blocks.find(b => b.contentType === "task" && b.category === category && b.id !== id)
+          if (existingCategorized) {
+            mergeTargetId = existingCategorized.id
+          }
+        }
+
+        const finalCategory = category || data.category
 
         return current.map(proj => {
           if (proj.id !== projectId) return proj
           if (mergeTargetId) {
             return {
               ...proj,
-              blocks: proj.blocks.filter(b => b.id !== id).map(b => b.id === mergeTargetId ? { ...b, text: b.text + "\n\n" + text, contentType: data.contentType, category: data.category, annotation: data.annotation, confidence: data.confidence, influencedBy, isUnrelated: data.isUnrelated, sources: data.sources ?? undefined, isEnriching: false, statusText: undefined, isError: false } : b)
+              blocks: proj.blocks.filter(b => b.id !== id).map(b => {
+                if (b.id === mergeTargetId) {
+                  const newText = b.text + "\n\n" + text
+                  let newAnnotation = b.annotation || ""
+                  if (data.annotation && !newAnnotation.includes(data.annotation)) {
+                    newAnnotation = newAnnotation ? newAnnotation + "\n\n---\n\n" + data.annotation : data.annotation
+                  }
+                  return {
+                    ...b,
+                    text: newText,
+                    contentType: b.contentType,
+                    category: b.category || finalCategory,
+                    annotation: newAnnotation,
+                    confidence: data.confidence,
+                    influencedBy,
+                    isUnrelated: data.isUnrelated,
+                    sources: data.sources ?? undefined,
+                    isEnriching: false,
+                    statusText: undefined,
+                    isError: false,
+                    subTasks: b.contentType === "task" || data.contentType === "task" ? parseSubTasks(newText, b.subTasks) : undefined
+                  }
+                }
+                return b
+              })
             }
           }
           return {
             ...proj,
-            blocks: proj.blocks.map(b => b.id === id ? { ...b, contentType: data.contentType, category: data.category, annotation: data.annotation, confidence: data.confidence, influencedBy, isUnrelated: data.isUnrelated, sources: data.sources ?? undefined, isEnriching: false, statusText: undefined, isError: false } : b)
+            blocks: proj.blocks.map(b => b.id === id ? {
+              ...b,
+              contentType: forcedType || data.contentType,
+              category: finalCategory,
+              annotation: data.annotation,
+              confidence: data.confidence,
+              influencedBy,
+              isUnrelated: data.isUnrelated,
+              sources: data.sources ?? undefined,
+              isEnriching: false,
+              statusText: undefined,
+              isError: false,
+              subTasks: (forcedType || data.contentType) === "task" ? parseSubTasks(b.text, b.subTasks) : undefined
+            } : b)
           }
         })
       })
       setTimeout(() => generateGhostNote(projectId), 2500)
     } catch (e: any) {
       console.warn(e)
-      const isNoKey = e?.message?.includes("No API key") || e?.message?.includes("Invalid or missing API key") || false
+      const errorMsg = e?.message || ""
+      const isNoKey = errorMsg.includes("No API key") || errorMsg.includes("Invalid or missing API key")
+      const isRateLimited = errorMsg.includes("Too many requests") || errorMsg.includes("Insufficient credits") || errorMsg.includes("rate-limiting")
+
+      if (isRateLimited && settings.modelId) {
+        markModelAsExhausted(settings.modelId)
+        // Fallback to Lite model
+        const models = getModelsForProvider(settings.provider)
+        const liteModel = models.find(m => m.id.includes("flash-lite") || m.id.includes("lite")) || models[models.length - 1]
+        if (liteModel && liteModel.id !== settings.modelId) {
+          updateSettings({ modelId: liteModel.id })
+        }
+      }
+
       setProjects((current: Project[]) => current.map(proj => proj.id === projectId ? {
         ...proj,
-        blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText: isNoKey ? "no-api-key" : e.message } : b)
+        blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText: isNoKey ? "no-api-key" : (isRateLimited ? "rate-limited" : e.message) } : b)
       } : proj))
     }
-  }, [generateGhostNote])
+  }, [generateGhostNote, settings.enabled])
 
   const addBlock = useCallback((text: string, forcedType?: ContentType) => {
     let resolvedText = text
     let resolvedType = forcedType
+    let resolvedCategory: string | undefined = undefined
+
     if (!resolvedType) {
-      const tagMatch = text.match(/^#([a-z]+)\s+(.+)/i)
+      const tagMatch = text.match(/^#([a-z]+)(?:\/([a-z]+))?\s+(.+)/i)
       if (tagMatch) {
         resolvedType = tagMatch[1].toLowerCase() as ContentType
-        resolvedText = tagMatch[2].trim()
+        resolvedCategory = tagMatch[2]?.toLowerCase()
+        resolvedText = tagMatch[3].trim()
       }
     }
     const newId = generateId()
@@ -372,11 +552,11 @@ export function useNodepad() {
     pushHistory(activeProjectId, blocksRef.current)
     updateActiveProject(p => ({
       ...p,
-      blocks: [...p.blocks, { id: newId, text: resolvedText, timestamp: Date.now(), contentType: initialDisplayType, isEnriching: true }]
+      blocks: [...p.blocks, { id: newId, text: resolvedText, category: resolvedCategory, timestamp: Date.now(), contentType: initialDisplayType, isEnriching: settings.enabled, subTasks: initialDisplayType === "task" ? parseSubTasks(resolvedText) : undefined }]
     }))
     setIsCommandKOpen(false)
-    enrichBlock(activeProjectId, newId, resolvedText, undefined, enrichForcedType).catch(console.error)
-  }, [activeProjectId, pushHistory, updateActiveProject, enrichBlock])
+    enrichBlock(activeProjectId, newId, resolvedText, resolvedCategory, enrichForcedType).catch(console.error)
+  }, [activeProjectId, pushHistory, updateActiveProject, enrichBlock, settings.enabled])
 
   const deleteBlock = useCallback((id: string) => {
     pushHistory(activeProjectId, blocksRef.current)
@@ -402,19 +582,19 @@ export function useNodepad() {
       }, 800)
       return prev.map(p => p.id === activeProjectId ? {
         ...p,
-        blocks: p.blocks.map(b => b.id === id ? { ...b, text: newText, isEnriching: true, isError: false } : b)
+        blocks: p.blocks.map(b => b.id === id ? { ...b, text: newText, isEnriching: settings.enabled, isError: false, subTasks: b.contentType === "task" ? parseSubTasks(newText, b.subTasks) : b.subTasks } : b)
       } : p)
     })
-  }, [activeProjectId, enrichBlock, pushHistory])
+  }, [activeProjectId, enrichBlock, pushHistory, settings.enabled])
 
   const reEnrichBlock = useCallback((id: string, newCategory?: string) => {
     const block = blocksRef.current.find(b => b.id === id)
     if (!block) return
     updateActiveProject(p => ({
       ...p,
-      blocks: p.blocks.map(b => b.id === id ? { ...b, category: newCategory, isEnriching: true } : b)
+      blocks: p.blocks.map(b => b.id === id ? { ...b, category: newCategory !== undefined ? newCategory : b.category, isEnriching: true } : b)
     }))
-    enrichBlock(activeProjectId, id, block.text, newCategory || block.category, block.contentType).catch(console.error)
+    enrichBlock(activeProjectId, id, block.text, newCategory || block.category, block.contentType, true).catch(console.error)
   }, [activeProjectId, updateActiveProject, enrichBlock])
 
   const editAnnotation = useCallback((id: string, newAnnotation: string) => {
@@ -440,20 +620,26 @@ export function useNodepad() {
   const handleToggleSubTask = useCallback((blockId: string, subTaskId: string) => {
     setProjects(current => current.map(p => p.id === activeProjectId ? {
       ...p,
-      blocks: p.blocks.map(b => b.id === blockId ? {
-        ...b,
-        subTasks: b.subTasks?.map(st => st.id === subTaskId ? { ...st, isDone: !st.isDone } : st)
-      } : b)
+      blocks: p.blocks.map(b => {
+        if (b.id !== blockId || !b.subTasks) return b
+        const nextSubTasks = b.subTasks.map(st => st.id === subTaskId ? { ...st, isDone: !st.isDone } : st)
+        const updatedText = nextSubTasks.map(st => (st.isDone ? "[x] " : "[ ] ") + st.text).join('\n')
+        return { ...b, subTasks: nextSubTasks, text: updatedText }
+      })
     } : p))
   }, [activeProjectId])
 
   const handleDeleteSubTask = useCallback((blockId: string, subTaskId: string) => {
     setProjects(current => current.map(p => p.id === activeProjectId ? {
       ...p,
-      blocks: p.blocks.map(b => b.id === blockId ? {
-        ...b,
-        subTasks: b.subTasks?.filter(st => st.id !== subTaskId)
-      } : b)
+      blocks: p.blocks.map(b => {
+        if (b.id !== blockId || !b.subTasks) return b
+        const nextSubTasks = b.subTasks.filter(st => st.id !== subTaskId)
+        const updatedText = nextSubTasks.length > 0 
+          ? nextSubTasks.map(st => (st.isDone ? "[x] " : "[ ] ") + st.text).join('\n')
+          : ""
+        return { ...b, subTasks: nextSubTasks, text: updatedText }
+      })
     } : p))
   }, [activeProjectId])
 
@@ -463,7 +649,7 @@ export function useNodepad() {
     pushHistory(activeProjectId, blocksRef.current)
     updateActiveProject(p => ({
       ...p,
-      blocks: p.blocks.map(b => b.id === id ? { ...b, contentType: newType, isEnriching: true } : b)
+      blocks: p.blocks.map(b => b.id === id ? { ...b, contentType: newType, isEnriching: true, subTasks: newType === "task" && !b.subTasks ? parseSubTasks(b.text) : (newType === "task" ? b.subTasks : undefined) } : b)
     }))
     enrichBlock(activeProjectId, id, block.text, block.category, newType).catch(console.error)
   }, [activeProjectId, pushHistory, updateActiveProject, enrichBlock])

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus,
@@ -20,6 +20,7 @@ import {
   FolderInput,
   Sparkles,
   HelpCircle,
+  AlertCircle,
 } from "lucide-react"
 import {
   AI_PROVIDER_PRESETS,
@@ -60,6 +61,8 @@ interface ProjectSidebarProps {
   ghostNoteCount: number
   onAboutClick: () => void
   highlightedSection?: { section: "ai" | "cloud", timestamp: number } | null
+  syncStatus?: "idle" | "syncing" | "success" | "error"
+  isOnline?: boolean
   className?: string
 }
 
@@ -83,6 +86,8 @@ export function ProjectSidebar({
   showSettings,
   onShowSettingsChange,
   highlightedSection,
+  syncStatus,
+  isOnline = true,
   className = "",
 }: ProjectSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -97,6 +102,7 @@ export function ProjectSidebar({
   const [showSyncKey, setShowSyncKey] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
   const [cloudOpen, setCloudOpen] = useState(false)
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -158,7 +164,8 @@ export function ProjectSidebar({
     onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys })
     onUpdateSyncSettings({
       url: syncDraft.url.trim(),
-      apiKey: syncDraft.apiKey.trim()
+      apiKey: syncDraft.apiKey.trim(),
+      enabled: syncDraft.enabled
     })
   }
 
@@ -167,10 +174,44 @@ export function ProjectSidebar({
     onShowSettingsChange(false)
   }
 
-  // Auto-save settings when the sidebar closes or when navigating back,
-  // so key edits are never silently dropped.
+  const hasUnsavedChanges = useMemo(() => {
+    // Compare AI settings
+    const aiChanged = 
+      draft.enabled !== aiSettings.enabled ||
+      draft.apiKey.trim() !== aiSettings.apiKey.trim() ||
+      draft.modelId !== aiSettings.modelId ||
+      draft.provider !== aiSettings.provider ||
+      draft.webGrounding !== aiSettings.webGrounding ||
+      draft.customBaseUrl !== aiSettings.customBaseUrl
+
+    // Compare Sync settings
+    const syncChanged = 
+      syncDraft.enabled !== syncSettings.enabled ||
+      syncDraft.url.trim() !== syncSettings.url.trim() ||
+      syncDraft.apiKey.trim() !== syncSettings.apiKey.trim()
+
+    return aiChanged || syncChanged
+  }, [draft, syncDraft, aiSettings, syncSettings])
+
+  // Improved close logic with confirmation
   const handleClose = () => {
-    if (showSettings) persistSettings()
+    if (showSettings && hasUnsavedChanges) {
+      setShowUnsavedConfirm(true)
+      return
+    }
+    onClose()
+  }
+
+  const handleDiscardAndClose = () => {
+    setDraft(aiSettings)
+    setSyncDraft(syncSettings)
+    setShowUnsavedConfirm(false)
+    onClose()
+  }
+
+  const handleSaveAndClose = () => {
+    persistSettings()
+    setShowUnsavedConfirm(false)
     onClose()
   }
 
@@ -238,18 +279,26 @@ export function ProjectSidebar({
                 {/* Synthesis Button */}
                 <button
                   onClick={onGhostPanelToggle}
-                  className="w-full flex items-center justify-between p-2 px-2.5 mb-2 rounded-sm bg-primary/10 hover:bg-primary/20 transition-all duration-150 group border border-primary/20 border-dashed"
+                  className={`w-full flex items-center justify-between p-2 px-2.5 mb-2 rounded-sm transition-all duration-150 group border border-dashed ${
+                    !aiSettings.enabled 
+                      ? "bg-zinc-900/40 border-white/5 opacity-50 grayscale hover:grayscale-0 hover:opacity-80" 
+                      : "bg-primary/10 border-primary/20 hover:bg-primary/20"
+                  }`}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-5 w-5 bg-primary/20 rounded-sm">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <div className={`flex items-center justify-center h-5 w-5 rounded-sm ${!aiSettings.enabled ? "bg-white/5" : "bg-primary/20"}`}>
+                      <Sparkles className={`h-3.5 w-3.5 ${!aiSettings.enabled ? "text-muted-foreground" : "text-primary"}`} />
                     </div>
-                    <span className="font-mono text-[12px] font-bold text-primary italic uppercase tracking-wider">Synthesis</span>
+                    <span className={`font-mono text-[12px] font-bold italic uppercase tracking-wider ${!aiSettings.enabled ? "text-muted-foreground" : "text-primary"}`}>Synthesis</span>
                   </div>
-                  {ghostNoteCount > 0 && (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-mono text-[9px] font-black text-primary-foreground">
-                      {ghostNoteCount}
-                    </span>
+                  {aiSettings.enabled ? (
+                    ghostNoteCount > 0 && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-mono text-[9px] font-black text-primary-foreground">
+                        {ghostNoteCount}
+                      </span>
+                    )
+                  ) : (
+                    <span className="font-mono text-[8px] font-black text-white/20 uppercase tracking-tighter">OFF</span>
                   )}
                 </button>
 
@@ -362,7 +411,7 @@ export function ProjectSidebar({
                 transition={{ duration: 0.15 }}
                 className="relative h-full overflow-y-auto px-3 py-4 flex flex-col gap-4 custom-scrollbar"
               >
-                <div className="pb-32 flex flex-col gap-6">
+                <div className="pb-64 flex flex-col gap-6">
                 <motion.div 
                   className="flex flex-col gap-4 rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden transition-colors"
                   animate={highlightedSection?.section === 'ai' ? { 
@@ -377,7 +426,14 @@ export function ProjectSidebar({
                     className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                      <div className="relative">
+                        <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className={`absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full border border-black ${
+                          !draft.enabled ? "bg-zinc-500" :
+                          draft.apiKey ? "bg-green-500" :
+                          "bg-destructive"
+                        }`} />
+                      </div>
                       <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-foreground">AI Settings</span>
                     </div>
                     <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
@@ -495,7 +551,7 @@ export function ProjectSidebar({
                                 />
                               </div>
                             ) : (
-                              <div className="relative">
+                            <div className="flex flex-col gap-2">
                                 <button
                                   onClick={() => setModelOpen(v => !v)}
                                   className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
@@ -509,33 +565,67 @@ export function ProjectSidebar({
                                 <AnimatePresence>
                                   {modelOpen && (
                                     <motion.div
-                                      initial={{ opacity: 0, y: -4 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      exit={{ opacity: 0, y: -4 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="relative overflow-hidden rounded-md border border-white/10 bg-white/[0.02] custom-scrollbar"
                                     >
-                                      {models.map(model => (
-                                        <button
-                                          key={model.id}
-                                          onClick={() => {
-                                            setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
-                                            setModelOpen(false)
-                                          }}
-                                          className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
-                                        >
-                                          <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                            draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
-                                          }`}>
-                                            {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
-                                          </div>
-                                          <div>
-                                            <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
-                                            <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
-                                          </div>
-                                          {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
-                                        </button>
-                                      ))}
+                                      <div className="max-h-[400px] overflow-y-auto">
+                                        {(() => {
+                                          const activeModels = models.filter(m => !m.label.includes("Legacy"))
+                                          const legacyModels = models.filter(m => m.label.includes("Legacy"))
+                                          
+                                          const renderModel = (model: any) => (
+                                            <button
+                                              key={model.id}
+                                              disabled={draft.exhaustedModels?.includes(model.id)}
+                                              onClick={() => {
+                                                setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
+                                                setModelOpen(false)
+                                              }}
+                                              className={`flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors ${
+                                                draft.exhaustedModels?.includes(model.id) ? "opacity-50 cursor-not-allowed bg-red-500/5" : "hover:bg-white/5"
+                                              }`}
+                                            >
+                                              <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                                draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
+                                              }`}>
+                                                {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                                              </div>
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                  <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
+                                                  {draft.exhaustedModels?.includes(model.id) && (
+                                                    <span className="font-mono text-[7px] font-bold uppercase tracking-tighter text-red-500 bg-red-500/10 px-1 rounded-sm border border-red-500/20">
+                                                      Exhausted
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
+                                              </div>
+                                              {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
+                                            </button>
+                                          )
+
+                                          return (
+                                            <>
+                                              {activeModels.length > 0 && (
+                                                <div className="sticky top-0 z-10 px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-widest text-muted-foreground bg-[#0d0d10] border-b border-white/5">
+                                                  Active Models
+                                                </div>
+                                              )}
+                                              {activeModels.map(renderModel)}
+                                              {legacyModels.length > 0 && (
+                                                <div className="px-2.5 py-1.5 font-mono text-[8px] font-bold uppercase tracking-widest text-muted-foreground bg-white/[0.02] border-y border-white/5">
+                                                  Legacy Models
+                                                </div>
+                                              )}
+                                              {legacyModels.map(renderModel)}
+                                            </>
+                                          )
+                                        })()}
+                                      </div>
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
@@ -573,14 +663,37 @@ export function ProjectSidebar({
                             </div>
                           )}
 
+                          {/* AI Enable Toggle */}
+                          <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                            <div className="flex items-start gap-2">
+                              <Sparkles className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                              <div>
+                                <div className="font-mono text-[11px] font-bold text-foreground">AI Enrichment</div>
+                                <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                                  Automatically classify and annotate your notes
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setDraft(d => ({ ...d, enabled: !d.enabled }))}
+                              className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                                draft.enabled ? "bg-primary" : "bg-white/10"
+                              }`}
+                            >
+                              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                                draft.enabled ? "left-5" : "left-0.5"
+                              }`} />
+                            </button>
+                          </div>
+
                           {/* API Status */}
                           <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                            draft.apiKey
+                            draft.enabled && draft.apiKey
                               ? "bg-primary/10 border border-primary/20 text-primary"
                               : "bg-white/5 border border-white/5 text-muted-foreground"
                           }`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                            {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                            <span className={`h-1.5 w-1.5 rounded-full ${draft.enabled && draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
+                            {!draft.enabled ? "AI Enrichment disabled" : draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
                           </div>
                         </div>
                       </motion.div>
@@ -602,7 +715,15 @@ export function ProjectSidebar({
                     className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
+                      <div className="relative">
+                        <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className={`absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full border border-black ${
+                          !syncDraft.enabled ? "bg-zinc-500" :
+                          syncStatus === "syncing" ? "bg-amber-500 animate-pulse" :
+                          syncStatus === "error" ? "bg-destructive" :
+                          "bg-green-500"
+                        }`} />
+                      </div>
                       <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-foreground">Cloud Settings</span>
                     </div>
                     <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${cloudOpen ? "rotate-180" : ""}`} />
@@ -653,13 +774,36 @@ export function ProjectSidebar({
                                 {showSyncKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                               </button>
                             </div>
+                            {/* Cloud Enable Toggle */}
+                            <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5 mt-2">
+                              <div className="flex items-start gap-2">
+                                <Cloud className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                                <div>
+                                  <div className="font-mono text-[11px] font-bold text-foreground">Cloud Sync</div>
+                                  <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                                    Keep your notes synced across devices
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setSyncDraft(d => ({ ...d, enabled: !d.enabled }))}
+                                className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                                  syncDraft.enabled ? "bg-primary" : "bg-white/10"
+                                }`}
+                              >
+                                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                                  syncDraft.enabled ? "left-5" : "left-0.5"
+                                }`} />
+                              </button>
+                            </div>
+
                             <div className={`flex items-center gap-2 mt-1 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                              syncDraft.url
+                              syncDraft.enabled && syncDraft.url
                                 ? "bg-primary/10 border border-primary/20 text-primary"
                                 : "bg-white/5 border border-white/5 text-muted-foreground"
                             }`}>
-                              {syncDraft.url ? <Cloud className="h-2.5 w-2.5 shrink-0" /> : <CloudOff className="h-2.5 w-2.5 shrink-0" />}
-                              {syncDraft.url ? "Cloud sync enabled" : "Sync disabled"}
+                              {syncDraft.enabled && syncDraft.url ? <Cloud className="h-2.5 w-2.5 shrink-0" /> : <CloudOff className="h-2.5 w-2.5 shrink-0" />}
+                              {!syncDraft.enabled ? "Cloud sync disabled" : syncDraft.url ? "Cloud sync enabled" : "No endpoint configured"}
                             </div>
                           </div>
                         </div>
@@ -726,6 +870,55 @@ export function ProjectSidebar({
             </div>
           )}
         </div>
+
+        {/* Unsaved Changes Confirmation Overlay */}
+        <AnimatePresence>
+          {showUnsavedConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="w-full max-w-[200px] bg-[#1a1a1c] border border-white/10 rounded-lg p-5 shadow-2xl flex flex-col gap-4"
+              >
+                <div className="flex flex-col gap-1 text-center">
+                  <div className="flex justify-center mb-1">
+                    <AlertCircle className="h-6 w-6 text-amber-500" />
+                  </div>
+                  <h3 className="font-mono text-[11px] font-bold uppercase tracking-wider text-foreground">Unsaved Changes</h3>
+                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                    You have modified settings. Would you like to save them?
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleSaveAndClose}
+                    className="w-full py-2 bg-primary hover:bg-primary/90 rounded-sm text-primary-foreground font-mono text-[9px] font-bold uppercase tracking-wider transition-all"
+                  >
+                    Save & Close
+                  </button>
+                  <button
+                    onClick={handleDiscardAndClose}
+                    className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-sm text-foreground font-mono text-[9px] font-bold uppercase tracking-wider transition-all border border-white/5"
+                  >
+                    Discard Changes
+                  </button>
+                  <button
+                    onClick={() => setShowUnsavedConfirm(false)}
+                    className="w-full py-2 text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-wider transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   )

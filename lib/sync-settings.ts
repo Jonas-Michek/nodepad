@@ -3,11 +3,13 @@ import { useState, useEffect } from "react"
 export interface SyncSettings {
   url: string
   apiKey: string
+  enabled: boolean
 }
 
 const DEFAULT_SETTINGS: SyncSettings = {
   url: "",
   apiKey: "$2a$10$.RlEN4IPmHxIgl4XbpVp2.SYXcpuW1ltpzFp6Yi1p4EivNIL31B9C",
+  enabled: true,
 }
 
 export function useSyncSettings() {

@@ -13,12 +13,13 @@ export interface GhostNote {
 interface GhostPanelProps {
   ghostNotes: GhostNote[]
   isOpen: boolean
+  aiEnabled: boolean
   onClose: () => void
   onClaim: (id: string) => void
   onDismiss: (id: string) => void
 }
 
-export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: GhostPanelProps) {
+export function GhostPanel({ ghostNotes, isOpen, aiEnabled, onClose, onClaim, onDismiss }: GhostPanelProps) {
   return (
     <div
       className={`flex flex-col h-full bg-black/20 backdrop-blur-3xl border-l border-border shrink-0 overflow-hidden relative z-50 transition-[max-width,opacity,visibility] duration-200 ease-in-out ${
@@ -52,7 +53,24 @@ export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: 
 
         {/* Note list */}
         <div className="flex-1 overflow-y-auto custom-scrollbar py-3 px-3 space-y-3">
-          {ghostNotes.length === 0 ? (
+          {!aiEnabled ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-4 opacity-30 text-center px-4">
+              <div className="relative">
+                <Sparkles className="h-6 w-6 text-muted-foreground" />
+                <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-black border border-white/10 flex items-center justify-center">
+                  <X className="h-2 w-2 text-red-500" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground">
+                  AI Disabled
+                </p>
+                <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-muted-foreground leading-relaxed">
+                  Enable AI in settings to<br />generate emergent theses
+                </p>
+              </div>
+            </div>
+          ) : ghostNotes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 gap-3 opacity-25">
               <Sparkles className="h-5 w-5" />
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-center leading-relaxed">
@@ -127,7 +145,7 @@ export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: 
         {/* Footer */}
         <div className="border-t border-border/30 px-3 py-2 shrink-0">
           <p className="font-mono text-[8px] text-muted-foreground/20 uppercase tracking-[0.15em] text-center">
-            Generated from your writing patterns
+            {!aiEnabled ? "Synthesis inactive" : "Generated from your writing patterns"}
           </p>
         </div>
       </div>

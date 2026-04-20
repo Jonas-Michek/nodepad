@@ -106,14 +106,21 @@ export function TilingArea({
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  // 1. Chunking into elastic chunks — declared before effects that depend on them
+  // 1. Chunking into mosaic pages
+  // We exclude the "sticky" task block from the grid because it is rendered in the header.
+  // All other task blocks (those with categories) will be shown in the grid.
+  const stickyTask = useMemo(() => 
+    blocks.find((b: TextBlock) => b.contentType === "task" && (!b.category || b.category === "general" || b.category === "no-topic")), 
+    [blocks]
+  )
+
   const chunkedPages = useMemo(() => {
     const gridBlocks = blocks
-      .filter((b: TextBlock) => b.contentType !== "task")
+      .filter((b: TextBlock) => b.id !== stickyTask?.id)
       .sort((a, b) => {
         const pinDiff = (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)
         if (pinDiff !== 0) return pinDiff
-        return a.timestamp - b.timestamp // stable: older blocks first within same pin state
+        return a.timestamp - b.timestamp
       })
     if (gridBlocks.length === 0) return []
     const chunks: TextBlock[][] = []
@@ -121,13 +128,14 @@ export function TilingArea({
       chunks.push(gridBlocks.slice(i, i + PAGE_SIZE))
     }
     return chunks
-  }, [blocks])
+  }, [blocks, stickyTask])
 
   const pageTrees = useMemo(() => {
     return chunkedPages.map(page => buildPageTree(page))
   }, [chunkedPages])
 
-  const taskBlock = useMemo(() => blocks.find((b: TextBlock) => b.contentType === "task"), [blocks])
+  // Alias for backward compatibility in the render function
+  const taskBlock = stickyTask
 
   // Track which page is in view via IntersectionObserver
   useEffect(() => {

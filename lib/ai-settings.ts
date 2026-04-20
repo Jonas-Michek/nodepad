@@ -73,10 +73,31 @@ export const AI_MODELS: AIModel[] = [
     supportsGrounding: true,
   },
   {
+    id: "google/gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro (Preview)",
+    shortLabel: "Gemini 3.1",
+    description: "Newest frontier model, advanced reasoning",
+    supportsGrounding: true,
+  },
+  {
+    id: "google/gemini-3.1-flash",
+    label: "Gemini 3.1 Flash",
+    shortLabel: "Flash 3.1",
+    description: "Fast and extremely capable",
+    supportsGrounding: true,
+  },
+  {
+    id: "google/gemini-3.1-flash-lite",
+    label: "Gemini 3.1 Flash Lite",
+    shortLabel: "Lite 3.1",
+    description: "Fastest, optimized for cost",
+    supportsGrounding: true,
+  },
+  {
     id: "google/gemini-2.5-pro-preview-03-25",
-    label: "Gemini 2.5 Pro",
-    shortLabel: "Gemini",
-    description: "Long-context, web grounding available",
+    label: "Gemini 2.5 Pro (Legacy)",
+    shortLabel: "Gemini 2.5",
+    description: "Legacy Pro model, long-context",
     supportsGrounding: true,
   },
   {
@@ -183,23 +204,44 @@ export const ZAI_MODELS: AIModel[] = [
 
 export const GOOGLE_MODELS: AIModel[] = [
   {
+    id: "gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro (Preview)",
+    shortLabel: "Gemini 3.1",
+    description: "Newest frontier model, advanced reasoning",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-3.1-flash",
+    label: "Gemini 3.1 Flash",
+    shortLabel: "Flash 3.1",
+    description: "Fast and extremely capable",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-3.1-flash-lite",
+    label: "Gemini 3.1 Flash Lite",
+    shortLabel: "Lite 3.1",
+    description: "Fastest, optimized for cost",
+    supportsGrounding: false,
+  },
+  {
     id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    shortLabel: "Gemini",
-    description: "Most capable Gemini model, long context",
+    label: "Gemini 2.5 Pro (Legacy)",
+    shortLabel: "Gemini 2.5",
+    description: "Legacy Pro model, long context",
     supportsGrounding: false,
   },
   {
     id: "gemini-2.5-flash",
     label: "Gemini 2.5 Flash",
-    shortLabel: "Flash",
+    shortLabel: "Flash 2.5",
     description: "Fast and capable",
     supportsGrounding: false,
   },
   {
     id: "gemini-2.5-flash-lite",
     label: "Gemini 2.5 Flash Lite",
-    shortLabel: "Flash Lite",
+    shortLabel: "Flash Lite 2.5",
     description: "Very fast, free tier",
     supportsGrounding: false,
   },
@@ -221,22 +263,25 @@ export interface AISettings {
   webGrounding: boolean
   provider: AIProvider
   customBaseUrl: string
+  enabled: boolean
   /** Per-provider key store so switching back to a provider restores its key */
   providerKeys?: Partial<Record<AIProvider, string>>
+  /** List of model IDs that have returned 429/402 errors in the current session */
+  exhaustedModels?: string[]
 }
 
 const STORAGE_KEY = "nodepad-ai-settings"
 
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", enabled: true }
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", ...JSON.parse(raw) }
+    if (!raw) return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", enabled: true, exhaustedModels: [] }
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", enabled: true, exhaustedModels: [], ...JSON.parse(raw) }
   } catch {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", enabled: true, exhaustedModels: [] }
   }
 }
 
@@ -250,7 +295,7 @@ export interface AIConfig {
 
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  if (!s.enabled || !s.apiKey) return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   // Use the matched model's id if found; otherwise fall back to the first model
@@ -303,7 +348,8 @@ export function useAISettings() {
   // modelLabel prop, etc.) between the server render and client hydration.
   const [settings, setSettings] = useState<AISettings>({
     apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false,
-    provider: DEFAULT_PROVIDER, customBaseUrl: "",
+    provider: DEFAULT_PROVIDER, customBaseUrl: "", enabled: true,
+    exhaustedModels: [],
   })
   const [isHydrated, setIsHydrated] = useState(false)
 
@@ -339,5 +385,15 @@ export function useAISettings() {
     supportsGrounding: false,
   }
 
-  return { settings, updateSettings, resolvedModelId, currentModel, models, isHydrated }
+  const markModelAsExhausted = useCallback((modelId: string) => {
+    updateSettings({
+      exhaustedModels: [...new Set([...(settings.exhaustedModels || []), modelId])]
+    })
+  }, [settings.exhaustedModels, updateSettings])
+
+  const clearExhaustedModels = useCallback(() => {
+    updateSettings({ exhaustedModels: [] })
+  }, [updateSettings])
+
+  return { settings, updateSettings, resolvedModelId, currentModel, models, isHydrated, markModelAsExhausted, clearExhaustedModels }
 }

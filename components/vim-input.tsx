@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Trello, Grid, Trash2, Clipboard, Download,
   FolderOpen, FolderPlus, BookOpen, Sparkles,
-  FolderDown, FolderInput, GitFork, X
+  FolderDown, FolderInput, GitFork, X, Hash
 } from "lucide-react"
 import { Command } from "cmdk"
 import { useModKey } from "@/lib/utils"
+import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
 
 const ACTION_ITEMS = [
   { id: "export-nodepad", icon: FolderDown,  label: "Export",  sub: ".nodepad"  },
@@ -25,14 +26,17 @@ interface VimInputProps {
   onCommand: (cmd: string, text?: string) => void
   isCommandKOpen: boolean
   setIsCommandKOpen: (open: boolean) => void
+  viewMode?: string
+  existingCategories?: string[]
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpen }: VimInputProps) {
+export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpen, viewMode, existingCategories }: VimInputProps) {
   const [value, setValue] = React.useState("")
   const [search, setSearch] = React.useState("")
   const [focusedIdx, setFocusedIdx] = React.useState(0)
+  const [suggestIdx, setSuggestIdx] = React.useState(0)
   const mod = useModKey()
 
   const mainInputRef = React.useRef<HTMLInputElement>(null)
@@ -109,6 +113,36 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
     setSearch("")
     close()
   }, [onCommand, value, close])
+
+  // ── Autocomplete Suggestions ──────────────────────────────────────────────
+  const suggestMatch = value.match(/^#([a-z]*)(?:\/([a-z0-9-]*))?$/i)
+  const isCategoryMode = suggestMatch && suggestMatch[2] !== undefined
+  const typeQuery = suggestMatch ? suggestMatch[1].toLowerCase() : ""
+  const categoryQuery = isCategoryMode ? suggestMatch[2]!.toLowerCase() : ""
+  
+  const suggestItems = React.useMemo(() => {
+    if (!suggestMatch) return []
+    
+    if (isCategoryMode) {
+      const allCats = existingCategories || []
+      const filtered = allCats.filter(c => c.toLowerCase().includes(categoryQuery))
+      return filtered.map(c => ({
+        id: c,
+        label: "Category",
+        icon: Hash,
+        accentVar: "var(--type-general)",
+        isCategory: true
+      }))
+    } else {
+      const items = (Object.entries(CONTENT_TYPE_CONFIG) as [ContentType, typeof CONTENT_TYPE_CONFIG[ContentType]][])
+        .map(([id, config]) => ({ id, ...config, isCategory: false }))
+      return items.filter(i => i.id.toLowerCase().includes(typeQuery) || i.label.toLowerCase().includes(typeQuery))
+    }
+  }, [suggestMatch, isCategoryMode, typeQuery, categoryQuery, existingCategories])
+
+  React.useEffect(() => {
+    setSuggestIdx(0)
+  }, [typeQuery, categoryQuery])
 
   // ── Grid keyboard navigation ─────────────────────────────────────────────
 
@@ -191,6 +225,39 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
       <Command
         className="w-full"
         onKeyDown={(e) => {
+          if (suggestItems.length > 0 && suggestMatch && !isCommandKOpen) {
+            if (e.key === "ArrowDown") {
+              e.preventDefault()
+              setSuggestIdx(prev => (prev + 1) % suggestItems.length)
+              return
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault()
+              setSuggestIdx(prev => (prev - 1 + suggestItems.length) % suggestItems.length)
+              return
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault()
+              const selected = suggestItems[suggestIdx]
+              if (selected) {
+                if (selected.isCategory) {
+                  setValue(`#${typeQuery}/${selected.id} `)
+                } else {
+                  setValue(`#${selected.id} `)
+                }
+              }
+              return
+            }
+            if (e.key === "Escape") {
+              // Just hide the menu by appending a space, or we could add a state, but space is easiest
+              // Actually, better to just let it fall through or do nothing, 
+              // but to really dismiss we can just clear the match by setting value to "# "
+              e.preventDefault()
+              setValue(value + " ")
+              return
+            }
+          }
+
           if (e.key === "Enter" && value.trim() && !isCommandKOpen) {
             onSubmit(value.trim())
             setValue("")
@@ -353,6 +420,55 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
               </div>
             </motion.div>
             </>
+          )}
+        </AnimatePresence>
+
+        {/* ── Autocomplete Menu ──────────────────────────────────────────── */}
+        <AnimatePresence>
+          {suggestMatch && suggestItems.length > 0 && !isCommandKOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute bottom-full left-0 mb-3 w-[300px] overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-2xl z-[120] custom-scrollbar max-h-[320px] flex flex-col"
+            >
+              <div className="px-3 py-2 border-b border-white/5 font-mono text-[9px] font-bold uppercase tracking-widest text-muted-foreground flex justify-between items-center">
+                <span>{isCategoryMode ? "Suggested Categories" : "Suggested Blocks"}</span>
+                <span className="text-[8px] opacity-50 font-normal normal-case">Tab / Enter</span>
+              </div>
+              <div className="p-1.5 flex flex-col gap-0.5 overflow-y-auto">
+                {suggestItems.map((item, i) => {
+                  const Icon = item.icon
+                  const isActive = i === suggestIdx
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-3 px-2 py-2 rounded-sm cursor-pointer transition-colors ${
+                        isActive ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                      onClick={() => {
+                        if (item.isCategory) {
+                          setValue(`#${typeQuery}/${item.id} `)
+                        } else {
+                          setValue(`#${item.id} `)
+                        }
+                        mainInputRef.current?.focus()
+                      }}
+                      onMouseEnter={() => setSuggestIdx(i)}
+                    >
+                      <div className="flex items-center justify-center w-5 h-5 rounded bg-white/5 text-muted-foreground" style={{ color: item.accentVar }}>
+                        <Icon size={12} strokeWidth={2.5} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-mono text-[11px] font-bold text-white capitalize">{item.id}</span>
+                        <span className="font-mono text-[9px] text-muted-foreground">{item.label}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
           )}
         </AnimatePresence>
 

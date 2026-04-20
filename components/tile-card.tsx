@@ -3,10 +3,24 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react"
 import { createPortal } from "react-dom"
 import { X, Check, Pin, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, Link as LinkIcon, Sparkles, Tag } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
+
+const AiRefreshIcon = ({ className }: { className?: string }) => (
+  <svg className={className} width="26" height="24" viewBox="0 0 26 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M11 5V1H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M19 7C19 5.89543 18.1046 5 17 5H5C3.89543 5 3 5.89543 3 7V15C3 16.1046 3.89543 17 5 17H9M16 17H17C18.1046 17 19 16.1046 19 15V12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M1 11H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8 10V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M14 10V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 16.375C12 14.6842 12.6716 13.0627 13.8672 11.8672C15.0627 10.6716 16.6842 10 18.375 10C20.1572 10.0067 21.8678 10.7021 23.1492 11.9408L24.75 13.5417" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M24.7499 10V13.5417H21.2083" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M24.75 16.375C24.75 18.0658 24.0783 19.6873 22.8828 20.8828C21.6873 22.0783 20.0658 22.75 18.375 22.75C16.5928 22.7433 14.8822 22.0479 13.6008 20.8092L12 19.2083" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M15.5417 19.2083H12V22.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 
 export interface TextBlock {
   id: string
@@ -111,9 +125,11 @@ export const TileCard = memo(function TileCard({
   const [editAnnotation, setEditAnnotation] = useState(block.annotation || "")
   const [isMounted, setIsMounted] = useState(false)
   const [isFooterExpanded, setIsFooterExpanded] = useState(false)
+  const [isAnnotationExpanded, setIsAnnotationExpanded] = useState(false)
   const [editingMinHeight, setEditingMinHeight] = useState<number | undefined>(undefined)
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(false)
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null)
+  const [deletingSubTaskId, setDeletingSubTaskId] = useState<string | null>(null)
   const typeChangeButtonRef = useRef<HTMLButtonElement>(null)
   const typePickerDropdownRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -389,6 +405,19 @@ export const TileCard = memo(function TileCard({
               <RefreshCw className={`h-2.5 w-2.5 ${block.isEnriching ? "animate-spin opacity-50" : ""}`} />
             </button>
           )}
+          {!effectiveCollapsed && block.contentType !== "thesis" && (block.confidence === undefined || block.isError) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onReEnrich(block.id)
+              }}
+              className="flex h-4 w-4 items-center justify-center rounded-sm transition-all opacity-40 hover:opacity-100 hover:bg-black/10"
+              title="Enrich with AI"
+              disabled={block.isEnriching}
+            >
+              <AiRefreshIcon className={`h-3 w-3 ${block.isEnriching ? "animate-spin opacity-50" : ""}`} />
+            </button>
+          )}
           {!effectiveCollapsed && onTogglePin && (
             <button
               onClick={(e) => {
@@ -543,7 +572,7 @@ export const TileCard = memo(function TileCard({
                       {isTask && block.subTasks ? (
                         <div className="flex flex-col gap-2">
                           {block.subTasks.map(st => (
-                            <div key={st.id} className="group/task flex items-start gap-3 rounded-md bg-white/5 p-2 transition-colors hover:bg-white/10">
+                            <div key={st.id} className="group/task relative flex items-start gap-3 rounded-md bg-white/5 p-2 transition-colors hover:bg-white/10">
                               <button
                                 onClick={() => onToggleSubTask?.(block.id, st.id)}
                                 className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all`} style={{ backgroundColor: st.isDone ? 'var(--type-task)' : 'transparent', borderColor: st.isDone ? 'var(--type-task)' : 'color-mix(in oklch, var(--type-task) 50%, transparent)' }}
@@ -554,16 +583,46 @@ export const TileCard = memo(function TileCard({
                                 {st.text}
                               </span>
                               <button
-                                onClick={() => {
-                                  if (confirm("Delete this task?")) {
-                                    onDeleteSubTask?.(block.id, st.id)
-                                  }
-                                }}
+                                onClick={() => setDeletingSubTaskId(st.id)}
                                 className="opacity-0 group-hover/task:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
                               >
                                 <X className="h-3 w-3 text-red-400" />
                               </button>
-                            </div>
+                            
+                            {/* Delete Confirmation Overlay for Subtask */}
+                            <AnimatePresence>
+                              {deletingSubTaskId === st.id && (
+                                <motion.div
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="absolute inset-0 z-10 bg-destructive/95 backdrop-blur-md rounded-md flex items-center justify-between px-3"
+                                >
+                                  <span className="font-mono text-[10px] font-bold text-white uppercase tracking-tighter">
+                                    Delete Task?
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        onDeleteSubTask?.(block.id, st.id)
+                                        setDeletingSubTaskId(null)
+                                      }}
+                                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => setDeletingSubTaskId(null)}
+                                      className="p-1.5 bg-black/30 hover:bg-black/40 rounded-full text-white transition-colors"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
                           ))}
                         </div>
                       ) : (
@@ -595,15 +654,28 @@ export const TileCard = memo(function TileCard({
                           </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-2">
-                          <div className={`prose-sm prose-invert max-w-none text-[13px] leading-relaxed text-foreground/80 ${block.isEnriching ? "shimmer-body" : ""} ${isAnnotationRTL ? 'rtl-text' : ''}`}>
-                            <ReactMarkdown 
-                              remarkPlugins={[remarkGfm]}
-                              components={MarkdownComponents as any}
-                            >
-                              {block.annotation || ""}
-                            </ReactMarkdown>
+                        <div className="flex flex-col gap-2 relative">
+                          <div className={`relative ${!isAnnotationExpanded ? 'max-h-[150px] overflow-hidden' : ''}`}>
+                            <div className={`prose-sm prose-invert max-w-none text-[13px] leading-relaxed text-foreground/80 ${block.isEnriching ? "shimmer-body" : ""} ${isAnnotationRTL ? 'rtl-text' : ''}`}>
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkGfm]}
+                                components={MarkdownComponents as any}
+                              >
+                                {block.annotation || ""}
+                              </ReactMarkdown>
+                            </div>
+                            {!isAnnotationExpanded && block.annotation && block.annotation.length > 300 && (
+                              <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#161616] to-transparent pointer-events-none" />
+                            )}
                           </div>
+                          {block.annotation && block.annotation.length > 300 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setIsAnnotationExpanded(!isAnnotationExpanded) }}
+                              className="self-start text-[10px] font-mono text-primary/80 hover:text-primary transition-colors flex items-center gap-1"
+                            >
+                              {isAnnotationExpanded ? "Skrýt analýzu" : "Zobrazit celou analýzu"}
+                            </button>
+                          )}
                         </div>
                     )}
                   </div>

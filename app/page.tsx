@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { TilingArea } from "@/components/tiling-area"
 import { KanbanArea } from "@/components/kanban-area"
@@ -14,6 +14,7 @@ import { IntroModal } from "@/components/intro-modal"
 import { AboutPanel } from "@/components/about-panel"
 import { TileIndex } from "@/components/tile-index"
 import { useNodepad } from "@/hooks/use-nodepad"
+import { useNetwork } from "@/hooks/use-network"
 import { AI_PROVIDER_PRESETS } from "@/lib/ai-settings"
 
 export default function Page() {
@@ -44,8 +45,17 @@ export default function Page() {
     handleChangeType, createProject, renameProject, deleteProject,
     claimGhostNote, dismissGhostNote, handleCommand,
   } = useNodepad()
+  const isOnline = useNetwork()
 
   const importInputRef = useRef<HTMLInputElement>(null)
+
+  const existingCategories = useMemo(() => {
+    const cats = new Set<string>()
+    blocks.forEach(b => {
+      if (b.category) cats.add(b.category)
+    })
+    return Array.from(cats).sort()
+  }, [blocks])
 
   // Force Inbox view on small screens automatically
   useEffect(() => {
@@ -115,6 +125,8 @@ export default function Page() {
         showSettings={isSettingsOpen}
         onShowSettingsChange={setIsSettingsOpen}
         highlightedSection={highlightedSection}
+        syncStatus={syncStatus}
+        isOnline={isOnline}
         onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
         ghostNoteCount={ghostNotes.filter(n => !n.isGenerating).length}
         onAboutClick={() => setIsAboutOpen(true)}
@@ -143,9 +155,9 @@ export default function Page() {
           }}
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
-          modelLabel={isHydrated && settings.apiKey ? currentModel.shortLabel : undefined}
-          providerLabel={isHydrated && settings.apiKey ? AI_PROVIDER_PRESETS.find(p => p.id === settings.provider)?.label : undefined}
-          modelId={isHydrated && settings.apiKey ? currentModel.id : undefined}
+          modelLabel={isHydrated && settings.enabled && settings.apiKey ? currentModel.shortLabel : undefined}
+          providerLabel={isHydrated && settings.enabled && settings.apiKey ? AI_PROVIDER_PRESETS.find(p => p.id === settings.provider)?.label : undefined}
+          modelId={isHydrated && settings.enabled && settings.apiKey ? currentModel.id : undefined}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
@@ -153,6 +165,9 @@ export default function Page() {
           }}
           onToolsClick={() => setIsCommandKOpen(prev => !prev)}
           syncStatus={syncStatus}
+          isOnline={isOnline}
+          aiEnabled={isHydrated && settings.enabled}
+          syncEnabled={isHydrated && syncSettings.enabled}
           onSettingsClick={(section) => {
             setHighlightedSection({ section, timestamp: Date.now() })
             if (!isSidebarOpen) {
@@ -168,12 +183,23 @@ export default function Page() {
           }}
         />
 
-        {isHydrated && !settings.apiKey && (
+        {isHydrated && settings.enabled && !settings.apiKey && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
-            <span className="opacity-80">⚡ AI enrichment requires an <strong className="text-amber-200">OpenRouter API key</strong></span>
+            <span className="opacity-80">⚡ AI enrichment requires an <strong className="text-amber-200">API key</strong></span>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => { setIsSidebarOpen(true); setIsSettingsOpen(true) }}
+                onClick={() => {
+                  setHighlightedSection({ section: 'ai', timestamp: Date.now() })
+                  if (!isSidebarOpen) {
+                    setIsSettingsOpen(true)
+                    setIsSidebarOpen(true)
+                  } else {
+                    if (!isSettingsOpen) {
+                      setIsSettingsOpen(true)
+                    }
+                  }
+                  setTimeout(() => setHighlightedSection(null), 2000)
+                }}
                 className="px-2.5 py-1 rounded bg-amber-700/60 hover:bg-amber-600/70 text-amber-100 font-medium transition-colors cursor-pointer border border-amber-600/50"
               >
                 Add API key →
@@ -257,6 +283,7 @@ export default function Page() {
           <GhostPanel
             ghostNotes={ghostNotes}
             isOpen={isGhostPanelOpen}
+            aiEnabled={isHydrated && settings.enabled}
             onClose={() => setIsGhostPanelOpen(false)}
             onClaim={claimGhostNote}
             onDismiss={dismissGhostNote}
@@ -285,6 +312,7 @@ export default function Page() {
           isCommandKOpen={isCommandKOpen}
           setIsCommandKOpen={setIsCommandKOpen}
           viewMode={viewMode}
+          existingCategories={existingCategories}
         />
       </div>
 
