@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useState } from "react"
 import { TileCard, type TextBlock } from "@/components/tile-card"
 import { useModKey } from "@/lib/utils"
 
@@ -35,8 +35,8 @@ export function InboxArea({
   highlightedBlockId,
   onHighlight,
 }: InboxAreaProps) {
-  const [showHistory, setShowHistory] = React.useState(false)
-  const [sessionStartTime] = React.useState(() => Date.now())
+  const [showHistory, setShowHistory] = useState(false)
+  const [sessionStartTime] = useState(() => Date.now())
   const mod = useModKey()
   const containerRef = useRef<HTMLDivElement>(null)
 
