@@ -73,31 +73,17 @@ export const AI_MODELS: AIModel[] = [
     supportsGrounding: true,
   },
   {
-    id: "google/gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro (Preview)",
-    shortLabel: "Gemini 3.1",
-    description: "Newest frontier model, advanced reasoning",
+    id: "google/gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    shortLabel: "Flash 2.5",
+    description: "Fast and capable",
     supportsGrounding: true,
   },
   {
-    id: "google/gemini-3.1-flash",
-    label: "Gemini 3.1 Flash",
-    shortLabel: "Flash 3.1",
-    description: "Fast and extremely capable",
-    supportsGrounding: true,
-  },
-  {
-    id: "google/gemini-3.1-flash-lite",
-    label: "Gemini 3.1 Flash Lite",
-    shortLabel: "Lite 3.1",
-    description: "Fastest, optimized for cost",
-    supportsGrounding: true,
-  },
-  {
-    id: "google/gemini-2.5-pro-preview-03-25",
-    label: "Gemini 2.5 Pro (Legacy)",
-    shortLabel: "Gemini 2.5",
-    description: "Legacy Pro model, long-context",
+    id: "google/gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash Lite",
+    shortLabel: "Lite 2.5",
+    description: "Very fast, free tier",
     supportsGrounding: true,
   },
   {
@@ -203,34 +189,6 @@ export const ZAI_MODELS: AIModel[] = [
 ]
 
 export const GOOGLE_MODELS: AIModel[] = [
-  {
-    id: "gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro (Preview)",
-    shortLabel: "Gemini 3.1",
-    description: "Newest frontier model, advanced reasoning",
-    supportsGrounding: false,
-  },
-  {
-    id: "gemini-3.1-flash",
-    label: "Gemini 3.1 Flash",
-    shortLabel: "Flash 3.1",
-    description: "Fast and extremely capable",
-    supportsGrounding: false,
-  },
-  {
-    id: "gemini-3.1-flash-lite",
-    label: "Gemini 3.1 Flash Lite",
-    shortLabel: "Lite 3.1",
-    description: "Fastest, optimized for cost",
-    supportsGrounding: false,
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro (Legacy)",
-    shortLabel: "Gemini 2.5",
-    description: "Legacy Pro model, long context",
-    supportsGrounding: false,
-  },
   {
     id: "gemini-2.5-flash",
     label: "Gemini 2.5 Flash",
