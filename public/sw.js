@@ -1,7 +1,7 @@
-const CACHE_NAME = 'nodepad-v1';
+const CACHE_NAME = 'nodepad-v2';
 const ASSETS_TO_CACHE = [
   '/',
-  '/manifest.json',
+  '/manifest.webmanifest',
   '/icon.svg',
   '/nodepad.jpg',
 ];
@@ -48,19 +48,31 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          return caches.match(event.request);
+          return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/');
+          });
         })
     );
   } else {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, networkResponse.clone());
+        if (cachedResponse) {
+          fetch(event.request)
+            .then((networkResponse) => {
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, networkResponse.clone());
+              });
+            })
+            .catch(() => {}); // Ignore offline errors for background updates
+          return cachedResponse;
+        } else {
+          return fetch(event.request).then((networkResponse) => {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, networkResponse.clone());
+            });
+            return networkResponse;
           });
-          return networkResponse;
-        });
-        return cachedResponse || fetchPromise;
+        }
       })
     );
   }

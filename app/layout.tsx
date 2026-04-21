@@ -19,7 +19,6 @@ export const metadata: Metadata = {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/icon.svg', // Fallback to SVG as apple-icon.png is missing
   },
-  manifest: '/manifest.json', // Also Next.js maps app/manifest.ts to this route
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
